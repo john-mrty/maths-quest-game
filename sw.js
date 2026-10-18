@@ -1,17 +1,47 @@
-const CACHE = "maths-quest-everyone-v59";
+const CACHE = "maths-quest-everyone-v61";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./app.js?v=59",
-  "./math-models.js?v=59",
-  "./learning.css?v=59",
-  "./adventure.js?v=59",
-  "./adventure.css?v=59",
-  "./island.js?v=59",
-  "./island.css?v=59",
-  "./racer.js?v=59",
-  "./racer.css?v=59",
+  "./app.js?v=61",
+  "./math-models.js?v=61",
+  "./learning.css?v=61",
+  "./adventure.js?v=61",
+  "./adventure.css?v=61",
+  "./island.js?v=61",
+  "./island.css?v=61",
+  "./racer.js?v=61",
+  "./racer.css?v=61",
+  "./turbo-tables.js?v=61",
+  "./turbo-tables.css?v=61",
+  "./turbo-tables/index.html",
+  "./turbo-tables/js/audio.js",
+  "./turbo-tables/js/game.js",
+  "./turbo-tables/js/host.js",
+  "./turbo-tables/js/karts.js",
+  "./turbo-tables/js/main.js",
+  "./turbo-tables/js/maths.js",
+  "./turbo-tables/js/textures.js",
+  "./turbo-tables/js/track.js",
+  "./turbo-tables/vendor/three/build/three.module.min.js",
+  "./turbo-tables/vendor/three/examples/jsm/environments/RoomEnvironment.js",
+  "./turbo-tables/vendor/three/examples/jsm/geometries/RoundedBoxGeometry.js",
+  "./turbo-tables/vendor/three/examples/jsm/math/SimplexNoise.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/EffectComposer.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/GTAOPass.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/MaskPass.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/OutputPass.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/Pass.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/RenderPass.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/ShaderPass.js",
+  "./turbo-tables/vendor/three/examples/jsm/postprocessing/UnrealBloomPass.js",
+  "./turbo-tables/vendor/three/examples/jsm/shaders/CopyShader.js",
+  "./turbo-tables/vendor/three/examples/jsm/shaders/GTAOShader.js",
+  "./turbo-tables/vendor/three/examples/jsm/shaders/LuminosityHighPassShader.js",
+  "./turbo-tables/vendor/three/examples/jsm/shaders/OutputShader.js",
+  "./turbo-tables/vendor/three/examples/jsm/shaders/PoissonDenoiseShader.js",
+  "./turbo-tables/vendor/three/examples/jsm/utils/BufferGeometryUtils.js",
   "./assets/turbo-trail-preview.png",
+  "./assets/turbo-tables-preview.svg",
   "./assets/cloud-crossing-preview.jpg",
   "./assets/beat-quest-preview.svg",
   "./vendor/three.module.min.js",
@@ -57,14 +87,15 @@ self.addEventListener("fetch", event => {
   if (!assets.has(url.pathname)) return;
 
   if (event.request.mode === "navigate") {
+    const shell=url.pathname.endsWith('/turbo-tables/index.html')?'./turbo-tables/index.html':'./index.html';
     event.respondWith(
       fetch(event.request)
         .then(response => {
           const copy = response.clone();
-          if (response.ok) caches.open(CACHE).then(cache => cache.put("./index.html", copy));
+          if (response.ok) caches.open(CACHE).then(cache => cache.put(shell, copy));
           return response;
         })
-        .catch(() => caches.match("./index.html"))
+        .catch(() => caches.match(shell))
     );
     return;
   }

@@ -1,6 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {raceQuestions,gateAnswers,drivingSpeed,approachDistance,racePace} from '../racer.js';
+import {raceQuestions,gateAnswers,drivingSpeed,approachDistance,racePace,formatRaceTime} from '../racer.js';
+test('race duration displays minutes and seconds without an upper time limit',()=>{
+ assert.equal(formatRaceTime(0),'0:00');assert.equal(formatRaceTime(125.8),'2:05');assert.equal(formatRaceTime(7205),'120:05');assert.equal(formatRaceTime(-3),'0:00');assert.equal(formatRaceTime(NaN),'0:00');
+});
 test('every class gets eight unique, correct, age-banded racing facts',()=>{
  for(let level=1;level<=6;level++)for(let run=0;run<100;run++){
  const qs=raceQuestions(level);assert.equal(qs.length,8);assert.equal(new Set(qs.map(q=>q.text)).size,8);assert.equal(new Set(qs.map(q=>[Math.min(q.a,q.b),q.op,Math.max(q.a,q.b)].join(':'))).size,8);

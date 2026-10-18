@@ -9,6 +9,7 @@ export function raceQuestions(level, random=Math.random, count=8){
 }
 export function approachDistance(score,fast,classLevel=6){const start=fast?96:126,shrink=Number(classLevel)===1?.90:.84;return Math.max(start/4,start*shrink**Math.max(0,score));}
 export function racePace(score,fast,classLevel=6){const start=fast?96:126,floor=start/4,distance=approachDistance(score,fast,classLevel);return {multiplier:start/distance,percent:(start-distance)/(start-floor)*100};}
+export function formatRaceTime(seconds){const total=Number.isFinite(Number(seconds))?Math.max(0,Math.floor(Number(seconds))):0;return `${Math.floor(total/60)}:${String(total%60).padStart(2,'0')}`;}
 export function gateAnswers(q,random=Math.random){
  const values=new Set([q.answer]);
  for(const n of [q.answer-q.b,q.answer+q.a,q.answer-1,q.answer+1])if(n>=0&&n!==q.answer&&values.size<3)values.add(n);
@@ -60,13 +61,18 @@ export function openRacer(learner,hooks){
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
  const dialog=document.createElement('dialog');dialog.className='racer-dialog';
  dialog.setAttribute('aria-labelledby','racerTitle');
- dialog.innerHTML=`<div class="racer-shell"><header class="racer-header"><div><span class="racer-kicker">CLOUDTOP CIRCUIT</span><h2 id="racerTitle">Turbo Trail</h2></div><button class="close" aria-label="Close Turbo Trail">×</button></header><div class="racer-stage"><div class="racer-hud"><span id="raceProgress">8 questions · pause any time</span><strong id="raceQuestion">Ready to roll?</strong><span id="raceCue">Drive through the right number. Hold ↑ to accelerate.</span></div><div class="race-gates" aria-label="Answer numbers"></div><div class="race-message" id="raceMessage" role="status" aria-live="polite"></div><div class="race-speed" aria-hidden="true">✦ <span id="raceSpeed">CRUISE</span></div></div><section class="race-dashboard"><div class="race-steering"><button class="secondary" id="raceLeft" aria-label="Steer left">←</button><span id="raceLane" role="status">Middle lane</span><button class="secondary" id="raceRight" aria-label="Steer right">→</button></div><div class="race-options"><label>Driving style<select id="raceMode"><option value="cruise">Cruise · generous thinking time</option><option value="race">Race · faster gates</option></select></label><button class="secondary" id="racePause" disabled>Pause</button><button class="secondary" id="raceHelp" disabled>Pit stop · help</button><button class="primary" id="raceStart">Start driving</button></div><div class="race-audio"><label><input type="checkbox" id="raceMusic"> Music</label><label><input type="checkbox" id="raceEffects"> Sound effects</label><span>← → steer · hold ↑ / W to accelerate · 1 2 3 choose a lane</span></div></section><section class="race-pit" hidden><h3 id="racePitTitle">Safe pit stop</h3><p id="racePitCopy"></p><div id="raceModel"></div><button class="primary" id="raceResume">Back to the track</button></section></div>`;
+ dialog.innerHTML=`<div class="racer-shell"><header class="racer-header"><div><span class="racer-kicker">CLOUDTOP CIRCUIT</span><h2 id="racerTitle">Turbo Trail</h2></div><button class="close" aria-label="Close Turbo Trail">×</button></header><div class="racer-stage"><div class="racer-hud"><span id="raceProgress">Endless race · pause any time</span><strong id="raceQuestion">Ready to roll?</strong><span id="raceCue">Drive through the right number. Hold ↑ to accelerate.</span></div><div class="race-gates" aria-label="Answer numbers"></div><div class="race-message" id="raceMessage" role="status" aria-live="polite"></div><div class="race-speed" aria-hidden="true">✦ <span id="raceSpeed">CRUISE</span></div></div><section class="race-dashboard"><div class="race-steering"><button class="secondary" id="raceLeft" aria-label="Steer left">←</button><span id="raceLane" role="status">Middle lane</span><button class="secondary" id="raceRight" aria-label="Steer right">→</button></div><div class="race-options"><label>Driving style<select id="raceMode"><option value="cruise">Cruise · generous thinking time</option><option value="race">Race · faster gates</option></select></label><button class="secondary" id="racePause" disabled>Pause</button><button class="secondary" id="raceHelp" disabled>Pit stop · help</button><button class="primary" id="raceStart">Start driving</button></div><div class="race-audio"><label><input type="checkbox" id="raceMusic"> Music</label><label><input type="checkbox" id="raceEffects"> Sound effects</label><span>← → steer · hold ↑ / W to accelerate · 1 2 3 choose a lane</span></div></section><section class="race-pit" hidden><h3 id="racePitTitle">Safe pit stop</h3><p id="racePitCopy"></p><div id="raceModel"></div><button class="primary" id="raceResume">Back to the track</button></section></div>`;
  document.body.appendChild(dialog);dialog.showModal();const $=s=>dialog.querySelector(s),stage=$('.racer-stage'),audio=chipAudio();
  let disposed=false,renderer,frame,observer,phase='ready',beforePause='drive',lane=1,carX=0,index=0,correct=0,helped=0,clock=0,travel=0,boost=0,bump=0,last=0,fast=false,accelerating=false,sprintUntil=0,approach=0,answers=[],q,questions=raceQuestions(learner.classLevel,Math.random,Infinity),feedbackTime=0,completionSaved=false,best=Number(learner.turboBest)||0;
  let lives=3;
+ let raceSeconds=0,longestSeconds=Math.max(0,Number(learner.turboLongestSeconds)||0);
+ const raceClock=document.createElement('span');raceClock.id='raceClock';$('.racer-hud').appendChild(raceClock);
+ function updateRaceTime(){const text=`Race: ${formatRaceTime(raceSeconds)} · Longest: ${formatRaceTime(Math.max(longestSeconds,raceSeconds))}`;if(raceClock.textContent!==text)raceClock.textContent=text;}
+ function trackRaceTime(seconds){if(!document.hidden&&['drive','feedback'].includes(phase)){raceSeconds+=Math.max(0,seconds);updateRaceTime();}}
+ updateRaceTime();
  const hearts=document.createElement('div');hearts.id='raceLives';hearts.setAttribute('role','status');hearts.setAttribute('aria-live','polite');$('.racer-hud').prepend(hearts);
  function updateLives(){hearts.setAttribute('aria-label',`${lives} ${lives===1?'life':'lives'} remaining`);hearts.innerHTML=Array.from({length:3},(_,i)=>`<span aria-hidden="true" class="${i<lives?'':'lost-life'}">${i<lives?'♥':'♡'}</span>`).join('');}
- updateLives();$('#raceProgress').textContent=`Personal best: ${best} · 3 lives per race`;
+ updateLives();$('#raceProgress').textContent=`Personal best: ${best} · 3 lives · no time limit`;
  $('#raceCue').textContent='Drive through the right number. Hold ↑ or swipe up to accelerate.';
  $('.racer-hud').appendChild($('#raceStart'));
  $('#raceHelp').remove();
@@ -209,14 +215,14 @@ export function openRacer(learner,hooks){
  }
  function finish(){
   phase='finish';audio.pause();audio.sound('finish');gateRoot.visible=false;$('.race-gates').hidden=true;
-  const newBest=correct>best;best=Math.max(best,correct);
-  if(!completionSaved){completionSaved=true;hooks.complete({questions:index+1,correct,independent:questions.slice(0,index+1).filter(q=>q.passed&&!q.helped).length,helped,best});}
-  $('#raceQuestion').textContent=newBest?'New personal best!':'Run complete';
+  const newBest=correct>best,newLongest=raceSeconds>longestSeconds;best=Math.max(best,correct);longestSeconds=Math.max(longestSeconds,raceSeconds);updateRaceTime();
+  if(!completionSaved){completionSaved=true;hooks.complete({questions:index+1,correct,independent:questions.slice(0,index+1).filter(q=>q.passed&&!q.helped).length,helped,best,durationSeconds:raceSeconds});}
+  $('#raceQuestion').textContent=newBest?'New personal best!':newLongest?'New longest race!':'Run complete';
   $('#raceProgress').textContent=`${correct} sums completed · Personal best: ${best}`;
   $('#raceCue').textContent=`${q.text} = ${q.answer}. Take another run when you’re ready.`;
   $('#raceMessage').textContent='';$('#racePause').disabled=true;endControls.hidden=false;$('#raceSpeed').textContent='FINISH';
  }
- function startRace(){lives=3;updateLives();fast=$('#raceMode').value==='race';index=correct=helped=clock=travel=boost=bump=approach=0;lane=1;carX=0;accelerating=false;sprintUntil=0;completionSaved=false;questions=raceQuestions(learner.classLevel,Math.random,Infinity);endControls.hidden=true;$('.race-pit').hidden=true;$('#raceMode').disabled=true;$('#raceMode').parentElement.hidden=true;$('#raceStart').hidden=true;$('#racePause').disabled=false;audio.start(fast);nextQuestion();last=performance.now();}
+ function startRace(){lives=3;updateLives();raceSeconds=0;updateRaceTime();fast=$('#raceMode').value==='race';index=correct=helped=clock=travel=boost=bump=approach=0;lane=1;carX=0;accelerating=false;sprintUntil=0;completionSaved=false;questions=raceQuestions(learner.classLevel,Math.random,Infinity);endControls.hidden=true;$('.race-pit').hidden=true;$('#raceMode').disabled=true;$('#raceMode').parentElement.hidden=true;$('#raceStart').hidden=true;$('#racePause').disabled=false;audio.start(fast);nextQuestion();last=performance.now();}
  $('#raceStart').onclick=startRace;$('#raceNew').onclick=startRace;
  function resize(){const {width,height}=stage.getBoundingClientRect();renderer.setSize(width,height);camera.aspect=width/height;camera.fov=width<600?60:48;camera.updateProjectionMatrix();}
  observer=new ResizeObserver(resize);observer.observe(stage);resize();steer(1);
@@ -232,7 +238,7 @@ export function openRacer(learner,hooks){
   });
  }
  function tick(now){
-  if(disposed)return;frame=requestAnimationFrame(tick);const dt=Math.min(.05,(now-(last||now))/1000);last=now;
+  if(disposed)return;frame=requestAnimationFrame(tick);const elapsed=Math.max(0,(now-(last||now))/1000),dt=Math.min(.05,elapsed);last=now;trackRaceTime(elapsed);
   if(document.hidden)return;
   if(!document.hidden&&['drive','feedback'].includes(phase)){
    const sprinting=accelerating||now<sprintUntil,speed=drivingSpeed(fast,sprinting,boost,bump,learner.classLevel);travel+=dt*speed;boost=Math.max(0,boost-dt);bump=Math.max(0,bump-dt);
