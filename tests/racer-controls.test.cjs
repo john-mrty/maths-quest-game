@@ -16,7 +16,16 @@ test('three lives preserve score and journey after two misses, show corrections,
  }
  assert.equal(h.next,2);assert.equal(h.finishes,1);
  h.phase='drive';h.lives=2;h.lane=1;h.feedbackTime=0;h.resolve();assert.equal(h.lives,2);assert.equal(h.correct,3);h.advanceFeedback(.7);assert.equal(h.phase,'drive');
- const reset=source.slice(source.indexOf('function startRace(){')+'function startRace(){'.length,source.indexOf("fast=$('#raceMode')"));vm.runInContext(reset,h);assert.equal(h.lives,3);
+ h.updateRaceTime=()=>{};h.raceSeconds=125;const reset=source.slice(source.indexOf('function startRace(){')+'function startRace(){'.length,source.indexOf("fast=$('#raceMode')"));vm.runInContext(reset,h);assert.equal(h.lives,3);assert.equal(h.raceSeconds,0);
+});
+test('race time counts active driving and recovery but excludes pauses, hidden tabs, ready and finish',()=>{
+ const start=source.indexOf(' function trackRaceTime('),end=source.indexOf(' updateRaceTime();',start);
+ const h={document:{hidden:false},phase:'drive',raceSeconds:0,updateRaceTime(){}};vm.createContext(h);vm.runInContext(source.slice(start,end),h);
+ h.trackRaceTime(120);h.phase='feedback';h.trackRaceTime(3);assert.equal(h.raceSeconds,123);
+ for(const phase of ['pause','ready','finish']){h.phase=phase;h.trackRaceTime(600);}assert.equal(h.raceSeconds,123);
+ h.phase='drive';h.document.hidden=true;h.trackRaceTime(600);assert.equal(h.raceSeconds,123);h.document.hidden=false;h.trackRaceTime(1200);assert.equal(h.raceSeconds,1323);
+ assert.equal((source.match(/finish\(\);/g)||[]).length,1);assert.match(source,/if\(lives===0\)finish\(\)/);
+ assert.match(source,/if\(index>=questions.length\).*questions.push/);
 });
 test('control hints distinguish touch and keyboard devices and update on layout changes',()=>{
  const start=source.indexOf(' function defaultSteeringCopy()'),end=source.indexOf(' touchControls.addEventListener',start);

@@ -32,3 +32,8 @@ test('normal app navigation still refreshes the offline shell',async()=>{
   f.handlers.fetch({request:{url:'https://app.test/',method:'GET',mode:'navigate'},respondWith:value=>response=value});
   await response;assert.deepEqual(f.writes,['./index.html']);
 });
+test('embedded game navigation cannot replace the Maths Quest offline shell',async()=>{
+ const f=fixture();let response;
+ f.handlers.fetch({request:{url:'https://app.test/turbo-tables/index.html?embedded=1&token=session',method:'GET',mode:'navigate'},respondWith:value=>response=value});
+ await response;assert.deepEqual(f.writes,['./turbo-tables/index.html']);
+});
