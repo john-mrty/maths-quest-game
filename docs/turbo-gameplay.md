@@ -15,3 +15,9 @@ deno test --allow-read --import-map=tests/three-import-map.json tests/turbo-game
 All 19 checks pass. Browser inspection confirmed the visible countdown, correct-answer boost confirmation, timeout correction and resumed racing without arches, with no console errors. The prior visual polish is included in this working tree; cache version 63 refreshes both sets of changes. Physical-device handling and performance still need playtesting.
 
 The later driving-help adjustment replaces automatic lane-following with direct player steering plus 30% guidance and a small edge recovery assist. Automatic acceleration and gentle corner braking remain. The player can still initiate manual drifts. Two additional checks verify partial guidance/manual control and the progress bar's decreasing fraction while respecting pause.
+
+## October mobile and difficulty update
+
+Landscape phone feedback sits at the bottom centre, away from the horizon. Kart paint uses a soft satin finish. Racing setup displays the active learner’s latest avatar or custom profile photo. Tilt steering is available beside Driving help on touch devices, remembers the learner’s preference and requests motion access from the tap. The embedded frame delegates accelerometer and gyroscope access; missing readings or denied permission restore button controls. Tilt recentres after rotating the device.
+
+From 2nd class, opponents have higher answer accuracy and pace, brake less on curves and ease off less when ahead; each later class increases pace and accuracy further. 1st class keeps its existing settings. All racers still pause for maths questions. Physical mobile motion access and subjective race balance need device playtesting.

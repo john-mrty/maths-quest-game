@@ -255,7 +255,7 @@ export class Game {
         drift: { active: false, dir: 0, charge: 0 }, hop: 0, boost: 0, boostPower: 1, spin: 0, slow: 0, offroad: false,
         item: null, shield: false, bestLap: Infinity, lapStart: 0,
         stats: { max: 26 + ch.speed * 1.6, accel: 9 + ch.accel * 1.6, handling: 1.4 + ch.handling * 0.16, mass: 0.8 + (ch.id === 'bruno' ? 0.6 : ch.id === 'kiki' ? -0.3 : 0) },
-        ai: isPlayer ? null : { lane: (Math.random() - 0.5) * 7, laneTarget: (Math.random() - 0.5) * 7, laneTimer: 0, skill: 0.55 + Math.random() * 0.35, pace: 0.86 + Math.random() * 0.1, itemTimer: 0, gateChoice: null, lastGate: -1 },
+        ai: isPlayer ? null : { lane: (Math.random() - 0.5) * 7, laneTarget: (Math.random() - 0.5) * 7, laneTimer: 0, skill: (this.level.id >= 2 ? 0.78 + (this.level.id - 2) * 0.025 : 0.55) + Math.random() * (this.level.id >= 2 ? 0.12 : 0.35), pace: (this.level.id >= 2 ? 0.97 + (this.level.id - 2) * 0.012 : 0.86) + Math.random() * 0.1, itemTimer: 0, gateChoice: null, lastGate: -1 },
         prevIdx: idx, wheelSpin: 0, visualTilt: 0, visualSteer: 0, push: new THREE.Vector3(), laneLock: null,
       };
       this.racers.push(r);
@@ -642,9 +642,10 @@ export class Game {
     const steer = clamp(wrapAngle(Math.atan2(dx, dz) - r.heading) * 3.2, -1, 1);
     // Throttle: ease off for sharp bends ahead, rubber band to the player
     const curve = 1 - clamp(this.track.sampleAt(r.idx).tangent.dot(this.track.sampleAt(r.idx + 18).tangent), 0, 1);
-    let pace = ai.pace * (1 - curve * 0.9);
+    const competitive = this.level?.id >= 2;
+    let pace = ai.pace * (1 - curve * (competitive ? 0.65 : 0.9));
     const gap = this.player.progress - r.progress; // positive: AI behind
-    if (gap > 0.12) pace *= 1.15; else if (gap < -0.08) pace *= 0.85;
+    if (gap > 0.12) pace *= 1.15; else if (gap < -0.08) pace *= competitive ? 0.97 : 0.85;
     if (this.player.finished) pace = Math.max(pace, 0.9);
     const want = r.stats.max * pace; const throttle = r.speed < want ? 1 : 0; const brake = r.speed > want + 6 ? 1 : 0;
     // Items

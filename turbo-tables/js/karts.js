@@ -5,8 +5,8 @@ import { toon, clay } from './track.js';
 
 // ---------- Materials (made per kart so one kart can fade without affecting others) ----------
 let treadTex = null;
-const paintMat = (hex) => clay(hex, { roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.2, envMapIntensity: 0.85, normalScale: new THREE.Vector2(0.045, 0.045) });
-const chromeMat = () => clay(0xeef0f8, { roughness: 0.55, metalness: 0.1, sheen: 0.8, envMapIntensity: 0.6 });
+const paintMat = (hex) => clay(hex, { roughness: 0.78, clearcoat: 0.08, clearcoatRoughness: 0.8, envMapIntensity: 0.25, normalScale: new THREE.Vector2(0.045, 0.045) });
+const chromeMat = () => clay(0xeef0f8, { roughness: 0.75, metalness: 0.05, sheen: 0.35, envMapIntensity: 0.3 });
 const darkMat = () => clay(0x676c8a);
 const rubberMat = () => clay(0x585d78, { roughness: 0.95, sheen: 0.3 });
 const furMat = (hex) => clay(hex, { roughness: 0.92, sheen: 0.8, sheenRoughness: 0.6 });
