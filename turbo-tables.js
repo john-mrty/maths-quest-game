@@ -1,3 +1,7 @@
+export function racerPortrait(learner){
+ const names=['fox','panda','cat','dog','unicorn','owl','turtle','shark','badger'];
+ return /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(learner.photo||'')?learner.photo:new URL(`./assets/avatars/${names[learner.avatarId]||'fox'}.png`,location.href).href;
+}
 // Isolate the imported game's CSS, keyboard handlers and renderer in its own document.
 export function raceSummary(value) {
  if(!value||!Number.isInteger(value.asked)||value.asked<0||value.asked>10000||!Number.isInteger(value.correct)||value.correct<0||value.correct>value.asked||!Number.isFinite(value.time)||value.time<=0)return null;
@@ -5,7 +9,7 @@ export function raceSummary(value) {
 }
 export function openTurboTables(learner,hooks){
  const dialog=document.createElement('dialog');dialog.className='tables-dialog';dialog.setAttribute('aria-label','Turbo Tables');
- dialog.innerHTML='<div class="tables-shell"><header><strong>Turbo Tables</strong><span class="tables-learner"></span><button class="tables-pause" aria-label="Pause or resume Turbo Tables">Ⅱ</button><button class="close" aria-label="Close Turbo Tables">×</button></header><p class="tables-loading" role="status">Opening Turbo Tables…</p><iframe title="Turbo Tables racing game" sandbox="allow-scripts allow-same-origin" allow="autoplay"></iframe></div>';
+ dialog.innerHTML='<div class="tables-shell"><header><strong>Turbo Tables</strong><span class="tables-learner"></span><button class="tables-pause" aria-label="Pause or resume Turbo Tables">Ⅱ</button><button class="close" aria-label="Close Turbo Tables">×</button></header><p class="tables-loading" role="status">Opening Turbo Tables…</p><iframe title="Turbo Tables racing game" sandbox="allow-scripts allow-same-origin" allow="autoplay; accelerometer; gyroscope"></iframe></div>';
  const frame=dialog.querySelector('iframe'),token=crypto.randomUUID(),origin=location.origin,completed=new Set();let closed=false;
  const state=learner.turboTables||{setup:{},progress:{facts:{},history:[]}};learner.turboTables=state;
  dialog.querySelector('.tables-learner').textContent=learner.name;
@@ -13,7 +17,7 @@ export function openTurboTables(learner,hooks){
  dialog.querySelector('.tables-pause').onclick=()=>send('pause');
  function message(event){
   const m=event.data;if(closed||event.source!==frame.contentWindow||event.origin!==origin||m?.source!=='turbo-tables'||m.token!==token)return;
-  if(m.type==='ready')send('init',{name:learner.name,classLevel:learner.classLevel,setup:state.setup,progress:state.progress,sound:hooks.sound!==false});
+  if(m.type==='ready')send('init',{name:learner.name,classLevel:learner.classLevel,avatar:racerPortrait(learner),setup:state.setup,progress:state.progress,sound:hooks.sound!==false});
   if(m.type==='loaded')dialog.querySelector('.tables-loading').hidden=true;
   if(m.type==='exit'){dialog.close();return;}
   if(m.type==='error'){dialog.querySelector('.tables-loading').hidden=false;dialog.querySelector('.tables-loading').textContent='Turbo Tables could not start. Close it and try again.';}

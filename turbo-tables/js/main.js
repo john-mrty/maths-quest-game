@@ -14,7 +14,7 @@ const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `$
 // ---------- Setup state (remembered per device) ----------
 const setup = { name: '', levelId: 3, charId: 'pip', trackId: 'meadow', tilt: false, easy: false, opsByLevel: {} };
 try { Object.assign(setup, host?host.setup:JSON.parse(localStorage.getItem('turbo-tables-setup') || '{}')); } catch (e) { /* ignore */ }
-if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.classLevel)||1));if(!Object.hasOwn(host.setup||{},'easy'))setup.easy=setup.levelId<=2;setup.tilt=false;}
+if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.classLevel)||1));if(!Object.hasOwn(host.setup||{},'easy'))setup.easy=setup.levelId<=2;}
 const saveSetup = () => { if(host){notify('setup',setup);return;}try { localStorage.setItem('turbo-tables-setup', JSON.stringify(setup)); } catch (e) { /* ignore */ } };
 
 const sound = new Sound();
@@ -151,7 +151,7 @@ function buildSetup() {
   if (!PICKABLE.some((c) => c.id === setup.charId)) setup.charId = PICKABLE[0].id;
   if (!Object.keys(portraits).length) makePortraits();
   $('levels').innerHTML = LEVELS.map((l) => `<button class="chip ${l.id === setup.levelId ? 'on' : ''}" data-level="${l.id}">${l.name.split(' ')[0]}<small>class</small></button>`).join('');
-  if(host){$('levels').hidden=true;$('levels').previousElementSibling.textContent=`Ready, ${host.name}?`;}
+  if(host){$('levels').hidden=true;const heading=$('levels').previousElementSibling;heading.textContent=`Ready, ${host.name}?`;if(host.avatar){const portrait=document.createElement('img');portrait.className='learnerPortrait';portrait.src=host.avatar;portrait.alt='';heading.prepend(portrait);}}
   const level = LEVELS.find((l) => l.id === setup.levelId);
   $('levelBlurb').textContent = `${level.name} · ${level.blurb}`;
   const on = opsFor(level);
@@ -237,6 +237,7 @@ function tiltAngle(e) {
 function onTilt(e) {
   if (!tilt.on) return;
   const v = tiltAngle(e); if (v === null) return;
+  if (!tilt.seen || tilt.center === null) tilt.center = v;
   tilt.seen = true; tilt.raw = v;
   const d = v - tilt.center; const dz = Math.abs(d) < 3 ? 0 : d - Math.sign(d) * 3;
   touch.tiltSteer = Math.max(-1, Math.min(1, -dz / 18));
@@ -250,8 +251,9 @@ function tiltFail(msg) { tilt.on = false; setup.tilt = false; touch.tiltSteer = 
 // Must be called straight from a tap: iPhones only ask for motion access inside a tap
 function enableTilt() {
   const finish = () => {
-    if (!tilt.listening) { window.addEventListener('deviceorientation', onTilt); tilt.listening = true; }
-    tilt.on = true; tilt.seen = false; renderTilt('Hold your device level, then tilt like a steering wheel.');
+    if (!tilt.listening) { window.addEventListener('deviceorientation', onTilt);
+      screen.orientation?.addEventListener('change', () => { tilt.center = null; touch.tiltSteer = null; }); tilt.listening = true; }
+    tilt.on = true; tilt.seen = false; tilt.center = null; renderTilt('Hold your device level, then tilt like a steering wheel.');
     setTimeout(() => { if (tilt.on && !tilt.seen) tiltFail('Tilt is not available here, so use the arrow buttons. Some apps block the motion sensor.'); }, 1500);
   };
   try {
@@ -279,7 +281,7 @@ for (const [id, key] of [['tLeft', 'left'], ['tRight', 'right'], ['tGas', 'gas']
 }
 
 const touchDevice=navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches;
-if(host){$('btnBack').textContent='← Back to games';$('btnTilt').hidden=true;$('tiltMsg').hidden=true;}
+if(host){$('btnBack').textContent='← Back to games';}
 window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){game.togglePause(true);sound.setMuted(true);game.dispose();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
 buildSetup();

@@ -20,11 +20,12 @@ test('all imported class question banks generate correct distinct answer choices
 test('embedded messages require matching source, origin and session; results deduplicate and cleanup removes listeners',()=>{
  const listeners={},sent=[],parts={};let saves=0,finishes=0,closes=0;
  const frame={contentWindow:{postMessage:(m,origin)=>sent.push({m,origin})}},dialog={setAttribute(){},querySelector:s=>s==='iframe'?frame:(parts[s]||={}),addEventListener:(n,fn)=>listeners['dialog:'+n]=fn,remove(){},showModal(){},close(){listeners['dialog:close']();}};
- const h={document:{createElement:()=>dialog,body:{appendChild(){}}},window:{addEventListener:(n,fn)=>listeners[n]=fn,removeEventListener:n=>delete listeners[n]},location:{origin:'https://app.test'},crypto:{randomUUID:()=> 'session'}};
+ const h={document:{createElement:()=>dialog,body:{appendChild(){}}},window:{addEventListener:(n,fn)=>listeners[n]=fn,removeEventListener:n=>delete listeners[n]},URL,location:{origin:'https://app.test',href:'https://app.test/'},crypto:{randomUUID:()=> 'session'}};
  const source=fs.readFileSync(new URL('../turbo-tables.js',import.meta.url),'utf8').replaceAll('export function','function');vm.createContext(h);vm.runInContext(source,h);
  const learner={name:'Same name',classLevel:2};h.openTurboTables(learner,{save:()=>saves++,complete:()=>finishes++,close:()=>closes++});
  const message=(type,data,overrides={})=>listeners.message({source:frame.contentWindow,origin:'https://app.test',data:{source:'turbo-tables',token:'session',type,data},...overrides});
- message('ready',null,{origin:'https://bad.test'});message('ready',null,{source:{}});assert.equal(sent.length,0);message('ready');assert.equal(sent[0].m.data.name,'Same name');assert.equal(sent[0].m.data.classLevel,2);
+ message('ready',null,{origin:'https://bad.test'});message('ready',null,{source:{}});assert.equal(sent.length,0);message('ready');assert.equal(sent[0].m.data.name,'Same name');assert.equal(sent[0].m.data.classLevel,2);assert.equal(sent[0].m.data.avatar,'https://app.test/assets/avatars/fox.png');
+ assert.equal(h.racerPortrait({avatarId:8}),'https://app.test/assets/avatars/badger.png');assert.equal(h.racerPortrait({photo:'data:image/png;base64,YQ=='}),'data:image/png;base64,YQ==');assert.equal(h.racerPortrait({photo:'javascript:alert(1)'}),'https://app.test/assets/avatars/fox.png');
  const result={runId:'run',asked:5,correct:4,time:80,rank:2,track:'meadow',classLevel:2};message('complete',result);message('complete',result);assert.equal(finishes,1);assert.equal(learner.turboTables.races,1);assert.equal(saves,1);dialog.close();assert.equal(listeners.message,undefined);assert.equal(frame.src,'about:blank');assert.equal(closes,1);
 });
 test('all transitive game imports are cached offline and the external font dependency is removed',()=>{

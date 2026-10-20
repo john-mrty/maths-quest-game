@@ -45,9 +45,9 @@ test('camera remains finite through cornering and reduced motion disables camera
  assert.ok(camera.fov>65);assert.ok(camera.position.toArray().every(Number.isFinite));assert.equal(subject.speedStreaks.visible,true);
 });
 
-test('every character kart has valid wheel geometry and glossy painted bodywork',()=>{
+test('every character kart has valid wheel geometry and soft satin painted bodywork',()=>{
  for(const character of CHARACTERS){const kart=buildKart(character);assert.equal(kart.wheels.length,4);
-  assert.ok(kart.mats.some(m=>m.clearcoat===1&&m.roughness<0.4));
+  assert.ok(kart.mats.some(m=>m.clearcoat===0.08&&m.roughness>=0.75));
   const box=new THREE.Box3().setFromObject(kart.group);assert.ok(box.min.toArray().every(Number.isFinite));assert.ok(box.max.toArray().every(Number.isFinite));
  }
 });
