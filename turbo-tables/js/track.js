@@ -17,8 +17,8 @@ export const LANES = [-5, 0, 5];
 
 export const TRACKS = [
   {
-    id: 'meadow', name: 'Sunny Meadow', blurb: 'Gentle bends, big skies. A good first race.', laps: 3,
-    sky: 0x8ccaf5, skyBottom: 0xe6f5ff, horizon: 0xfff3d6, fog: 0xdcefff, sun: [60, 90, 40], sunColour: 0xfff2e0, sunIntensity: 1.7, hemi: 1.1,
+    id: 'meadow', name: 'Sunny Meadow', blurb: 'Flower gardens, a timber bridge and sparkling waterfalls.', laps: 3,
+    sky: 0x68bce9, skyBottom: 0xcceefa, horizon: 0xffe8bb, fog: 0xdcefff, sun: [60, 90, 40], sunColour: 0xffe6bb, sunIntensity: 2.0, hemi: 1.0,
     ground: 0xa6e28f, ground2: 0x8fd47f, road: 0xaaacc6, kerbA: 0xff9fb2, kerbB: 0xfffaf0,
     wall: 0xfffaf3, wallB: 0xa9d8ff, tree: [0x9fdc8c, 0xb8e89a, 0x86cf86], trunk: 0xc7a184, hill: 0xb3e6a0, decor: 'trees', cloud: 0xffffff, lake: true,
     points: [[0, 0], [120, 0], [200, 40], [220, 140], [160, 210], [60, 230], [-40, 200], [-80, 120], [-160, 90], [-200, 0], [-150, -90], [-60, -110], [0, -60]],
@@ -59,11 +59,13 @@ export class Track {
       return { pos: p, tangent, right, t };
     });
     this.group = new THREE.Group();
+    this.bridgeIndex = def.id === 'meadow' ? Math.round(this.N * 0.24) : null;
     this.textures = this.makeTextures();
     this.buildRoad();
     this.buildWalls();
     this.buildStartLine();
     this.buildDecor();
+    if (this.bridgeIndex !== null) this.buildMeadowLandmark();
     this.layoutFeatures();
   }
 
@@ -163,6 +165,7 @@ export class Track {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1);
     const cA = new THREE.Color(d.wall), cB = new THREE.Color(d.wallB); let k = 0;
     for (let i = 0; i < n; i += step) {
+      if (this.bridgeIndex !== null && Math.abs(i - this.bridgeIndex) <= 10) continue;
       const s = this.sampleAt(i + 1);
       for (const side of [-1, 1]) {
         const p = s.pos.clone().addScaledVector(s.right, side * (ROAD_HALF + 2.2)); p.y += 0.5;
@@ -255,6 +258,7 @@ export class Track {
       const s = this.samples[Math.floor(rng() * n)]; const side = rng() < 0.5 ? -1 : 1;
       const dist = ROAD_HALF + 13 + rng() * 42;
       const p = s.pos.clone().addScaledVector(s.right, side * dist); p.y = -0.3;
+      if (this.bridgeIndex !== null && p.distanceTo(this.sampleAt(this.bridgeIndex).pos) < 48) continue;
       if (this.isNearRoad(p, ROAD_HALF + 12)) continue;
       if (placed.some((q) => q.distanceToSquared(p) < 40)) continue;
       if (d.lake && p.distanceTo(this.lakeCentre()) < 34) continue;
@@ -296,6 +300,75 @@ export class Track {
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.softSprite(), color: 0xfff2c0, transparent: true, opacity: 0.5, depthWrite: false, fog: false })); glow.scale.set(160, 160, 1); glow.position.copy(moon.position); this.group.add(glow);
     }
   }
+  buildMeadowLandmark() {
+    const s = this.sampleAt(this.bridgeIndex), landmark = new THREE.Group();
+    landmark.position.copy(s.pos); landmark.lookAt(s.pos.clone().add(s.tangent)); this.group.add(landmark);
+    const wood = clay(0xe1b67c, { roughness: 0.7 }), cream = clay(0xffedce), rock = clay(0xa5b7be);
+    const add = (geometry, material, x, y, z) => {
+      const m = new THREE.Mesh(geometry, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; landmark.add(m); return m;
+    };
+    // Planks follow the existing road elevation so physics and scenery agree.
+    const plankG = new RoundedBoxGeometry(ROAD_HALF * 2, 0.22, 1.85, 2, 0.09);
+    const deck = new THREE.InstancedMesh(plankG, wood, 19); deck.name = 'meadow-bridge-deck'; deck.receiveShadow = true;
+    const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.28, 8, 6), cream, 38);
+    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.15, 0.2, 1.8, 8), wood, 14); posts.castShadow = true;
+    const piece = new THREE.Object3D(); let capIndex = 0, postIndex = 0;
+    for (let i = -9; i <= 9; i++) {
+      const a = this.sampleAt(this.bridgeIndex + i);
+      piece.position.copy(a.pos); piece.position.y += 0.1; piece.lookAt(a.pos.clone().add(a.tangent)); piece.updateMatrix(); deck.setMatrixAt(i + 9, piece.matrix);
+      for (const side of [-1, 1]) {
+        piece.rotation.set(0, 0, 0); piece.position.copy(a.pos).addScaledVector(a.right, side * (ROAD_HALF + 0.5)); piece.position.y += 1.6; piece.updateMatrix(); caps.setMatrixAt(capIndex++, piece.matrix);
+        if (i % 3 === 0) { piece.position.y -= 0.7; piece.updateMatrix(); posts.setMatrixAt(postIndex++, piece.matrix); }
+      }
+    }
+    this.group.add(deck, caps, posts);
+    for (const side of [-1, 1]) {
+      const points = [];
+      for (let i = -9; i <= 9; i++) { const a = this.sampleAt(this.bridgeIndex + i); const p = a.pos.clone().addScaledVector(a.right, side * (ROAD_HALF + 0.5)); p.y += 1.6; points.push(p); }
+      const rail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 36, 0.12, 6, false), cream); rail.castShadow = true; this.group.add(rail);
+    }
+    const waterMat = new THREE.MeshStandardMaterial({ color: 0x58c8cc, roughness: 0.5, envMapIntensity: 0.2 });
+    const riverShape = new THREE.Shape(); riverShape.moveTo(-52, -5); riverShape.bezierCurveTo(-22, -12, 10, -5, 46, -9); riverShape.quadraticCurveTo(58, 0, 46, 8); riverShape.bezierCurveTo(10, 13, -22, 5, -52, 9); riverShape.quadraticCurveTo(-61, 2, -52, -5);
+    const river = add(new THREE.ShapeGeometry(riverShape, 24), waterMat, 0, -s.pos.y + 0.02, 0); river.rotation.x = -Math.PI / 2; river.castShadow = false;
+    const rockG = new THREE.DodecahedronGeometry(1, 1);
+    add(new RoundedBoxGeometry(10, 18, 18, 3, 2), rock, 32, 7, 0);
+    for (let i = 0; i < 9; i++) {
+      const r = add(rockG, rock, 32 + Math.sin(i * 2.3) * 2, 3 + (i % 3) * 3, (i % 2 ? -1 : 1) * (9 + i % 3));
+      r.scale.set(4, 6 + i % 2 * 2, 3); r.rotation.y = i * 0.8;
+    }
+    const fallMat = new THREE.MeshPhysicalMaterial({ color: 0xb0f4ed, roughness: 0.26, clearcoat: 0.8, emissive: 0x297d85, emissiveIntensity: 0.18, side: THREE.DoubleSide });
+    const fall = add(new THREE.PlaneGeometry(10, 18, 8, 16), fallMat, 26.8, 7, 0); fall.rotation.y = -Math.PI / 2; fall.castShadow = false; this.waterfall = fall;
+    const lip = add(new THREE.PlaneGeometry(7, 10), waterMat, 30, 16, 0); lip.rotation.x = -Math.PI / 2; lip.castShadow = false;
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xf0ffef });
+    this.waterRibbons = [];
+    const ribbonG = new THREE.CapsuleGeometry(0.12, 1.7, 2, 5);
+    for (let i = 0; i < 20; i++) {
+      const ribbon = add(ribbonG, foamMat, 26.7, i % 7 * 2.5 - 1, (i * 3.7 % 9) - 4.5); ribbon.castShadow = false; this.waterRibbons.push(ribbon);
+    }
+    const mistCount = this.quality === 'high' ? 28 : 12;
+    this.mist = [];
+    const mistMat = new THREE.SpriteMaterial({ map: TEX.softSprite(), color: 0xe6fff4, transparent: true, opacity: 0.3, depthWrite: false });
+    for (let i = 0; i < mistCount; i++) { const sp = new THREE.Sprite(mistMat); sp.position.set(25 - i % 5, 0, (i * 2.7 % 12) - 6); sp.scale.setScalar(2 + i % 3); landmark.add(sp); this.mist.push(sp); }
+    // A pastel rainbow frames the waterfall without crossing the driving line.
+    for (const [i, colour] of [0xffb2bc, 0xffdc92, 0xfff1ac, 0xb7e6be, 0xb3d9f4].entries()) {
+      const arc = add(new THREE.TorusGeometry(12 + i * 0.45, 0.22, 6, 40, Math.PI), new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.52 }), 25.8, 0, 0); arc.rotation.y = Math.PI / 2; arc.castShadow = false;
+    }
+    // Instancing keeps a generous border of giant daisies cheap on touch devices.
+    const count = this.quality === 'high' ? 360 : 180, rng = mulberry(86);
+    const flowerG = mergeGeometries(Array.from({ length: 5 }, (_, i) => new THREE.SphereGeometry(0.36, 6, 4).scale(1, 0.35, 0.6).translate(Math.cos(i * Math.PI * 0.4) * 0.38, 0, Math.sin(i * Math.PI * 0.4) * 0.38)));
+    const petals = new THREE.InstancedMesh(flowerG, clay(0xffffff), count);
+    const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.06, 1, 5), clay(0x5eaa81), count);
+    const centres = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 6, 4), clay(0xffd86e), count);
+    const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), scale = new THREE.Vector3();
+    for (let i = 0; i < count; i++) {
+      const a = this.sampleAt(Math.floor(rng() * this.N)), p = a.pos.clone().addScaledVector(a.right, (rng() < 0.5 ? -1 : 1) * (14 + rng() * 8));
+      const size = 0.65 + rng() * 0.8; scale.setScalar(size);
+      p.y = Math.max(-0.2, a.pos.y - 0.7); matrix.compose(p, quat, scale); stems.setMatrixAt(i, matrix);
+      p.y += 0.5 * size; matrix.compose(p, quat, scale); petals.setMatrixAt(i, matrix); centres.setMatrixAt(i, matrix); petals.setColorAt(i, new THREE.Color([0xfff8e7, 0xffb8cc, 0xc3b8f3][i % 3]));
+    }
+    this.group.add(petals, stems, centres);
+  }
+
   lakeCentre() {
     if (this._lake) return this._lake;
     // Find the infield point furthest from the track
@@ -316,6 +389,9 @@ export class Track {
   }
 
   update(dt, time) {
+    if (this.waterfall) { const p = this.waterfall.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getY(i) * 1.8 + p.getX(i) * 2 + time * 6) * 0.13); p.needsUpdate = true; }
+    for (const [i, ribbon] of (this.waterRibbons || []).entries()) ribbon.position.y = 16 - ((time * 12 + i * 2.7) % 18);
+    for (const [i, sp] of (this.mist || []).entries()) { sp.position.y = -1 + ((time * 0.7 + i * 0.37) % 4); sp.material.rotation = Math.sin(time * 0.3) * 0.1; }
     for (const c of this.clouds) { c.position.x += c.userData.speed * dt; if (c.position.x > 560) c.position.x = -560; }
     if (this.water) this.water.material.clearcoatRoughness = 0.02 + Math.sin(time * 1.3) * 0.015;
   }

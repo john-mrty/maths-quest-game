@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sunny Meadow visual preview</title>
+<style>body{margin:0;background:#cceefa;font:600 14px system-ui;color:#283a45}canvas{display:block;width:100vw;height:100vh}aside{position:fixed;bottom:20px;left:20px;background:#fff9ebed;border:2px solid white;border-radius:20px;padding:14px 20px;box-shadow:0 5px 25px #25434c22}strong{display:block;font-size:22px}button{font:inherit;border:0;border-radius:12px;background:#7653ca;color:white;padding:9px 15px;margin:10px 6px 0 0;cursor:pointer}</style>
+<script type="importmap">{"imports":{"three":"../../turbo-tables/vendor/three/build/three.module.min.js","three/addons/":"../../turbo-tables/vendor/three/examples/jsm/"}}</script>
+</head><body><canvas aria-label="Animated preview of Sunny Meadow's waterfall bridge and toy racing kart"></canvas><aside><strong>Sunny Meadow</strong>Waterfall bridge · visual preview<br><button id="bridge">The crossing</button><button id="kart">The kart</button></aside>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {Track,TRACKS} from '../../turbo-tables/js/track.js';
+import {buildKart,CHARACTERS} from '../../turbo-tables/js/karts.js';
+import {Game} from '../../turbo-tables/js/game.js';
+const renderer=new THREE.WebGLRenderer({canvas:document.querySelector('canvas'),antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.92;
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(58,1,0.5,1500);
+const pmrem=new THREE.PMREMGenerator(renderer);scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;pmrem.dispose();
+const params=new URLSearchParams(location.search),definition=TRACKS.find(t=>t.id===params.get('track'))||TRACKS[0];
+const track=new Track(definition,'medium');scene.add(track.group);scene.fog=new THREE.FogExp2(definition.fog,definition.stars?0.0022:0.0016);
+const lighting={scene,quality:'medium'};Game.prototype.buildSky.call(lighting,definition);Game.prototype.buildLights.call(lighting,definition);
+const previewIndex=track.bridgeIndex??Math.round(track.N*0.24);
+const s=track.sampleAt(previewIndex),anchor=new THREE.Object3D();anchor.position.copy(s.pos);anchor.lookAt(s.pos.clone().add(s.tangent));anchor.updateMatrixWorld();
+const world=(x,y,z)=>anchor.localToWorld(new THREE.Vector3(x,y,z));
+lighting.sun.position.copy(world(45,75,-30));lighting.sun.target.position.copy(s.pos);
+const kart=buildKart(CHARACTERS[3]);const a=track.sampleAt(previewIndex-5);kart.group.position.copy(a.pos);kart.group.rotation.y=Math.atan2(a.tangent.x,a.tangent.z);scene.add(kart.group);
+const tilePreview=new URLSearchParams(location.search).has('tile');if(tilePreview)document.querySelector('aside').hidden=true;
+let mode=params.get('view')==='track'?'bridge':tilePreview?'kart':'bridge';document.querySelector('#bridge').onclick=()=>mode='bridge';document.querySelector('#kart').onclick=()=>mode='kart';
+function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();
+renderer.setAnimationLoop(ms=>{const time=ms/1000;track.update(1/60,time);
+ if(mode==='bridge'){camera.position.copy(world(-21,15,-36));camera.lookAt(world(7,4,0));}
+ else{camera.position.copy(kart.group.position).add(new THREE.Vector3(-4,2.8,-5));camera.lookAt(kart.group.position.clone().add(new THREE.Vector3(0,1,0)));}
+ lighting.sky.position.copy(camera.position);renderer.render(scene,camera);
+});
+</script></body></html>

@@ -219,24 +219,19 @@ body.touch .qopt .key { display: none; }
 .quizCard.good { border-color: var(--green); } .quizCard.bad { border-color: var(--red); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
+<link rel="stylesheet" href="menu.css">
 
 <div id="stage">
   <canvas id="gl"></canvas>
 
-  <!-- Title -->
-  <div id="title" class="layer menu">
-    <div class="logo">Turbo<span>Tables</span></div>
-    <div class="tag">A maths kart racer for ages 7 to 12</div>
-    <div class="card" style="width:min(560px,100%)">
-      <div class="field"><label for="name">Who's racing?</label><input id="name" maxlength="16" placeholder="Your name" autocomplete="off"></div>
-      <p class="sub" style="margin:10px 0 0">At each maths gate the race pauses. Pick the right answer for a turbo boost!</p>
-    </div>
-    <button class="big" id="btnStart">Let's race!</button>
+  <div id="connecting" class="layer menu">
+    <div class="card"><p role="status">Opening your Maths Quest learner…</p></div>
   </div>
 
   <!-- Setup: three choices and go -->
   <div id="setup" class="layer menu" hidden>
     <div class="card pick">
+      <header class="race-menu-heading"><p class="eyebrow">Play games</p><h1>Turbo Tables</h1><p class="sub">Choose your racer and track. Answer maths questions for a turbo boost!</p></header>
       <section>
         <h2>Your class</h2>
         <div class="classes" id="levels"></div>
@@ -252,7 +247,7 @@ body.touch .qopt .key { display: none; }
         <div class="tracks" id="tracks"></div>
       </section>
       <div class="goRow">
-        <button class="chip" id="btnEasy" aria-pressed="false">Easy driving: Off</button>
+        <button class="chip" id="btnEasy" aria-pressed="false">Driving help: Off</button>
         <button class="big" id="btnGo">Race!</button>
         <button class="chip tiltOnly" id="btnTilt" aria-pressed="false">Tilt to steer: Off</button>
       </div>
@@ -273,22 +268,22 @@ body.touch .qopt .key { display: none; }
     <div class="hudBox" id="item"><span id="itemIcon"></span><small id="itemName"></small></div>
     <div class="hudBox" id="speedo">0<small> km/h</small></div>
     <canvas id="minimap" width="300" height="300"></canvas>
-    <div id="question"><div class="q" id="qText"></div><div class="opts"><div class="opt l0" id="o0"></div><div class="opt l1" id="o1"></div><div class="opt l2" id="o2"></div></div><div class="hint">Steer into the gate with the right answer</div></div>
+    <div id="question"><div class="q" id="qText"></div><div class="opts"><div class="opt l0" id="o0"></div><div class="opt l1" id="o1"></div><div class="opt l2" id="o2"></div></div><div class="hint">Pick the right answer for a boost</div></div>
     <div id="feedback"></div>
     <div id="count"></div>
     <div id="lapToast"></div>
     <div id="drift"><i></i></div>
     <div id="quiz" hidden>
       <div class="quizCard" id="quizCard">
-        <div class="quizTitle" id="quizTitle">Maths gate! Pick the answer</div>
+        <div class="quizTitle" id="quizTitle">Maths boost! Pick the answer</div>
+        <div class="bonus" id="quizCountdown" role="progressbar" aria-label="Time remaining to answer" aria-valuemin="0" aria-valuemax="10" aria-valuenow="10"><i id="bonusBar"></i></div>
         <div class="quizQ" id="quizQ"></div>
         <div class="quizOpts">
           <button class="qopt l0" data-choice="0"><span class="val" id="qa0"></span><span class="key">◀ or 1</span></button>
           <button class="qopt l1" data-choice="1"><span class="val" id="qa1"></span><span class="key">▲ or 2</span></button>
           <button class="qopt l2" data-choice="2"><span class="val" id="qa2"></span><span class="key">▶ or 3</span></button>
         </div>
-        <div class="bonus"><i id="bonusBar"></i></div>
-        <div class="bonusLabel" id="bonusLabel">Answer before the bar runs out for a super turbo</div>
+        <div class="bonusLabel" id="bonusLabel">Faster answers give bigger boosts</div>
       </div>
     </div>
     <div id="rotate">Turn your device sideways for the best view</div>
@@ -314,7 +309,7 @@ body.touch .qopt .key { display: none; }
       <div class="scoreGrid" id="rScores"></div>
       <h3 style="margin:16px 0 6px;font-size:20px">Practise these next</h3>
       <div class="practise" id="rWeak"></div>
-      <h3 style="margin:16px 0 6px;font-size:20px">Every gate this race</h3>
+      <h3 style="margin:16px 0 6px;font-size:20px">Every question this race</h3>
       <div class="log" id="rLog"></div>
       <div class="actions" style="margin-top:18px"><button class="big" id="btnAgain">Race again</button><button class="big alt" id="btnSetup">Change racer or track</button></div>
     </div>

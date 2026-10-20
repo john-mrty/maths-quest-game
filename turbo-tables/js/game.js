@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Track, ROAD_HALF, LANES, toon, makeTextPlane } from './track.js';
+import { Track, ROAD_HALF, LANES } from './track.js';
 import { buildKart, buildItemBox, buildJelly, buildBall, CHARACTERS } from './karts.js';
 import { QuestionBank } from './maths.js';
 import * as TEX from './textures.js';
@@ -10,20 +10,23 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const LANE_COLOURS = ['#f7708a', '#ffd86b', '#6f9dff'];
-const LANE_HEX = [0xf7708a, 0xffd86b, 0x6f9dff];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const UP = new THREE.Vector3(0, 1, 0);
-// Answer keys during a maths stop: left / middle / right gate
+// Answer keys during a maths stop: first / second / third answer.
 const QUIZ_KEYS = { ArrowLeft: 0, KeyA: 0, Digit1: 0, Numpad1: 0, ArrowUp: 1, KeyW: 1, Digit2: 1, Numpad2: 1, ArrowRight: 2, KeyD: 2, Digit3: 2, Numpad3: 2 };
-const BONUS_TIME = [8, 7, 6, 5, 4.5, 4]; // seconds for a super turbo, by class
+export const ANSWER_SECONDS = 10;
+export function answerBoost(seconds) {
+  const quickness = clamp(1 - seconds / ANSWER_SECONDS, 0, 1);
+  return { duration: 1 + quickness * 2, power: 1.15 + quickness * 0.45 };
+}
 
 export class Game {
   constructor({ canvas, sound, ui }) {
     this.canvas = canvas; this.sound = sound; this.ui = ui;
     this.quality = 'high';
+    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -117,7 +120,7 @@ export class Game {
     this.scene.environment = this.envMap;
     this.scene.fog = new THREE.FogExp2(trackDef.fog, trackDef.stars ? 0.0022 : 0.0016);
     this.autoGas = !!autoGas; this.easy = !!easy;
-    this.gateMode = gateMode || 'stop'; this.bonusTime = BONUS_TIME[(level.id || 1) - 1] || 6;
+    this.gateMode = 'stop'; this.bonusTime = ANSWER_SECONDS;
     this.quiz = null; this.timeScale = 1; this.ui.onQuizClose?.();
     this.track = new Track(trackDef, this.quality); this.scene.add(this.track.group);
     this.buildComposer();
@@ -127,6 +130,15 @@ export class Game {
     this.buildSky(trackDef); this.buildLights(trackDef);
     this.buildGates(); this.buildItemBoxes(); this.buildBoostPads();
     this.buildParticles();
+    this.camera.clear(); this.scene.add(this.camera);
+    const streaks = [], streakCount = this.quality === 'high' ? 24 : 12;
+    for (let i = 0; i < streakCount; i++) {
+      const side = i % 2 ? -1 : 1, x = side * (5 + i % 3), y = ((i * 1.7) % 8) - 4, z = -8 - i % 5;
+      streaks.push(x, y, z, x * 1.16, y * 1.16, z + 2.2);
+    }
+    const streakG = new THREE.BufferGeometry(); streakG.setAttribute('position', new THREE.Float32BufferAttribute(streaks, 3));
+    this.speedStreaks = new THREE.LineSegments(streakG, new THREE.LineBasicMaterial({ color: 0xfff1ce, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+    this.speedStreaks.frustumCulled = false; this.camera.add(this.speedStreaks);
     this.entities = [];
     this.buildRacers(character);
     this.stats = { asked: 0, correct: 0, stars: 0, log: [], times: [] };
@@ -175,7 +187,9 @@ export class Game {
 
   buildLights(def) {
     const hemi = new THREE.HemisphereLight(def.skyBottom, def.ground, def.hemi); this.scene.add(hemi);
-    this.scene.add(new THREE.AmbientLight(0xfff6ee, 0.55));
+    this.scene.add(new THREE.AmbientLight(0xfff6ee, 0.32));
+    const rim = new THREE.DirectionalLight(def.stars ? 0x989bff : 0xc5e9ff, 0.65);
+    rim.position.set(-60, 35, -80); this.scene.add(rim);
     const sun = new THREE.DirectionalLight(def.sunColour, def.sunIntensity); this.sunOffset = new THREE.Vector3(...def.sun); sun.position.copy(this.sunOffset);
     sun.castShadow = true; const res = this.quality === 'high' ? 2048 : 1024; sun.shadow.mapSize.set(res, res);
     const s = 75; Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 400 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04; sun.shadow.radius = 4;
@@ -184,42 +198,11 @@ export class Game {
 
   // ---------- Maths gates ----------
   buildGates() {
-    this.gates = [];
-    for (const gi of this.track.gateIndices) {
-      const s = this.track.sampleAt(gi);
-      const g = new THREE.Group(); g.position.copy(s.pos); g.lookAt(s.pos.clone().add(s.tangent));
-      const gate = { index: gi, group: g, signs: [], arches: [], laneMats: [], q: null, answered: null };
-      for (let l = 0; l < 3; l++) {
-        const x = -LANES[l]; // local +X is the driver's left, so flip to match lane offsets
-        const mat = toon(LANE_HEX[l], { emissive: LANE_HEX[l], emissiveIntensity: 0.12 }); gate.laneMats.push(mat);
-        const postG = new THREE.CylinderGeometry(0.3, 0.35, 5.5, 10);
-        for (const side of [-1, 1]) { const p = new THREE.Mesh(postG, mat); p.position.set(x + side * 2.1, 2.75, 0); p.castShadow = true; g.add(p); gate.arches.push(p); }
-        const beam = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.32, 10, 20, Math.PI), mat); beam.position.set(x, 5.5, 0); g.add(beam);
-        const sign = makeTextPlane('?', { w: 3.6, h: 2, bg: '#ffffff', fg: '#1d2440', border: LANE_COLOURS[l], radius: 60, emissive: true });
-        sign.position.set(x, 8.7, 0.4); g.add(sign);
-        const back = sign.clone(); back.rotation.y = Math.PI; back.position.z = -0.4; g.add(back);
-        gate.signs.push(sign);
-      }
-      // Question billboard above the middle lane
-      const board = makeTextPlane('', { w: 16, h: 3.4, bg: '#5a5f9a', fg: '#ffffff', radius: 70, border: '#ffd86b', font: 'bold 150px "Fredoka", "Nunito", sans-serif', emissive: true });
-      board.position.set(0, 12.2, 0); g.add(board);
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 3, 8), toon(0xdddde8)); pole.position.set(0, 9.6, 0); g.add(pole);
-      gate.board = board;
-      // Pre-gate markers so it reads from afar: coloured cones on the lane lines
-      for (let back = 10; back <= 40; back += 10) {
-        const sb = this.track.sampleAt(gi - back);
-        for (let l = 0; l < 3; l++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 8), toon(LANE_HEX[l])); c.position.copy(sb.pos).addScaledVector(sb.right, LANES[l]); c.position.y += 0.45; this.scene.add(c); }
-      }
-      this.scene.add(g); this.gates.push(gate);
-      this.refreshGate(gate);
-    }
+    // Invisible checkpoints schedule questions; answers no longer depend on a lane.
+    this.gates = this.track.gateIndices.map(index => ({ index, q: this.bank.next(), lastAskedLap: -1 }));
   }
   refreshGate(gate) {
-    gate.q = this.bank.next(); gate.answered = null;
-    gate.laneMats.forEach((m, i) => { m.emissive.setHex(LANE_HEX[i]); m.emissiveIntensity = 0.12; });
-    gate.q.options.forEach((o, i) => gate.signs[i].setText(String(o)));
-    gate.board.setText(gate.q.text + ' = ?');
-    gate.feedbackLanes = gate.q.options.map((o) => o === gate.q.answer);
+    gate.q = this.bank.next();
   }
 
   // ---------- Items ----------
@@ -309,8 +292,7 @@ export class Game {
     }
     this.particles.geometry.attributes.position.needsUpdate = true; this.particles.geometry.attributes.color.needsUpdate = true;
   }
-  confetti(pos, n = 40) {
-    const cols = [0xff9fb2, 0xffe08a, 0x9cc4ff, 0x9fe3a8, 0xd2b3ff, 0xffffff];
+  confetti(pos, n = 40, cols = [0xff9fb2, 0xffe08a, 0x9cc4ff, 0x9fe3a8, 0xd2b3ff, 0xffffff]) {
     for (let i = 0; i < n; i++) this.emit(pos.clone().add(new THREE.Vector3(0, 1.5, 0)), new THREE.Vector3((Math.random() - 0.5) * 12, 6 + Math.random() * 8, (Math.random() - 0.5) * 12), cols[i % cols.length], 1.2);
   }
 
@@ -353,7 +335,7 @@ export class Game {
     if (this.player.startBoost) { this.player.startBoost = false; this.applyBoost(this.player, 1.3, 1.25); }
     if (this.gateMode === 'stop' && !this.quiz && this.state === 'racing' && !this.player.finished) {
       const n = this.track.samples.length;
-      for (const gate of this.gates) { let d = gate.index - this.player.idx; if (d < 0) d += n; if (d > 0 && d < 34 && !gate.answered && gate.q) { this.openQuiz(gate); break; } }
+      for (const gate of this.gates) { let d = gate.index - this.player.idx; if (d < 0) d += n; if (d > 0 && d < 34 && gate.lastAskedLap !== this.player.lap) { this.openQuiz(gate); break; } }
     }
     if (this.autoPilot && !this.player.ai) this.player.ai = { lane: 0, laneTarget: 0, laneTimer: 0, skill: 1, pace: 0.95, itemTimer: 0, gateChoice: null, lastGate: -1 };
     if (!this.autoPilot && this.player.ai) this.player.ai = null;
@@ -411,6 +393,8 @@ export class Game {
       d.active = false; d.charge = 0;
     }
     const speedF = clamp(r.speed / st.max, -1, 1);
+    const slideTarget = !spinning && !r.offroad && !d.active && r.speed > st.max * 0.35 && Math.abs(inp.steer) > 0.18 ? inp.steer * Math.abs(speedF) : 0;
+    r.cornerSlide = lerp(r.cornerSlide || 0, slideTarget, 1 - Math.exp(-5 * dt));
     let turn = 0;
     if (!spinning) {
       if (d.active) {
@@ -420,7 +404,7 @@ export class Game {
         r.lateralVel = lerp(r.lateralVel, -d.dir * 7, 1 - Math.exp(-3 * dt));
       } else {
         turn = inp.steer * st.handling * (1.1 - 0.35 * Math.abs(speedF)) * dt * speedF;
-        r.lateralVel = lerp(r.lateralVel, 0, 1 - Math.exp(-6 * dt));
+        r.lateralVel = lerp(r.lateralVel, -r.cornerSlide * 1.4, 1 - Math.exp(-6 * dt));
       }
     } else { r.lateralVel = lerp(r.lateralVel, 0, 1 - Math.exp(-3 * dt)); }
     r.heading += turn;
@@ -473,6 +457,10 @@ export class Game {
       const col = d.charge > 2.2 ? 0xff9a2e : d.charge > 1 ? 0x7bdcff : 0xffffff;
       for (const side of [-1, 1]) { const p = r.pos.clone().addScaledVector(fwd, -0.9).addScaledVector(right, side * 0.85); p.y += 0.15; this.emit(p, new THREE.Vector3((Math.random() - 0.5) * 3, 2 + Math.random() * 3, (Math.random() - 0.5) * 3).addScaledVector(fwd, -6), col, 0.35); }
     }
+    if (!d.active && Math.abs(r.cornerSlide) > 0.25 && Math.random() < 0.4) {
+      const p = r.pos.clone().addScaledVector(fwd, -1).addScaledVector(right, Math.sign(r.cornerSlide) * 0.8); p.y += 0.15;
+      this.emit(p, new THREE.Vector3(0, 0.8, 0).addScaledVector(fwd, -3), 0xd8e5ee, 0.4);
+    }
     if (r.offroad && Math.abs(r.speed) > 4 && Math.random() < 0.6) { const p = r.pos.clone().addScaledVector(fwd, -0.8); p.y += 0.2; this.emit(p, new THREE.Vector3((Math.random() - 0.5) * 4, 2, (Math.random() - 0.5) * 4), this.track.def.ground, 0.5); }
     if (r.boost > 0 && Math.random() < 0.8) { const p = r.pos.clone().addScaledVector(fwd, -2.1); p.y += 0.5; this.emit(p, new THREE.Vector3((Math.random() - 0.5) * 2, 1, (Math.random() - 0.5) * 2).addScaledVector(fwd, -8), Math.random() < 0.5 ? 0xffa02e : 0xfff176, 0.3); }
 
@@ -481,17 +469,17 @@ export class Game {
     if (!spinning && inp.itemPressed && r.item) this.useItem(r);
   }
 
-  // Easy driving: the game handles speed and corners. Left and right move the kart across the road.
+  // Driving help handles the accelerator, with partial corner/edge guidance.
   easyInput(r, inp, dt) {
     const st = r.stats;
-    if (r.easyLane === undefined || r.easyLane === null) r.easyLane = clamp(this.track.lateral(r.pos, r.idx), -6.5, 6.5);
-    // The target lane moves with the steering but stays close to the kart, so it stops where you let go
     const lat = this.track.lateral(r.pos, r.idx);
-    r.easyLane = clamp(clamp(r.easyLane - inp.steer * 8 * dt, lat - 2, lat + 2), -6.5, 6.5);
+    const guidance = this.autoSteer(r, clamp(lat, -5.5, 5.5));
+    const edgeHelp = Math.abs(lat) > 6.5 ? this.autoSteer(r, 0) * 0.35 : 0;
+    const steering = clamp(inp.steer * 0.85 + guidance * 0.3 + edgeHelp, -1, 1);
     const bend = 1 - clamp(this.track.sampleAt(r.idx).tangent.dot(this.track.sampleAt(r.idx + 20).tangent), 0, 1);
     const want = st.max * (1 - bend * 0.55);
     const boosting = r.boost > 0;
-    return { throttle: boosting || r.speed < want ? 1 : 0, brake: !boosting && r.speed > want + 3 ? 1 : 0, reverse: 0, steer: this.autoSteer(r, r.easyLane), drift: false, driftPressed: false, itemPressed: inp.itemPressed };
+    return { throttle: boosting || r.speed < want ? 1 : 0, brake: !boosting && r.speed > want + 3 ? 1 : 0, reverse: 0, steer: steering, drift: inp.drift, driftPressed: inp.driftPressed, itemPressed: inp.itemPressed };
   }
 
   autoSteer(r, lane = 0) {
@@ -500,7 +488,7 @@ export class Game {
     return clamp(wrapAngle(Math.atan2(dx, dz) - r.heading) * 3, -1, 1);
   }
 
-  applyBoost(r, time, power) { r.boost = Math.max(r.boost, time); r.boostPower = Math.max(power, r.boost > 0 ? r.boostPower : 1); if (r.isPlayer) this.sound.boost(); }
+  applyBoost(r, time, power) { const active = r.boost > 0; r.boost = Math.max(r.boost, time); r.boostPower = active ? Math.max(power, r.boostPower) : power; if (r.isPlayer) this.sound.boost(); }
   spinOut(r, strength = 1) {
     if (r.shield) { r.shield = false; if (r.isPlayer) this.sound.shield(); return; }
     r.spin = 1.2 * strength; r.speed *= 0.3; r.drift.active = false; r.boost = 0;
@@ -555,40 +543,10 @@ export class Game {
     return (prev - cur) < n / 2 ? false : (gi > prev || gi <= cur);
   }
   checkGate(r) {
+    if (r.isPlayer) return; // Player rewards are resolved directly by the question card.
     for (const gate of this.gates) {
       if (!this.passedIndex(r, gate.index)) continue;
-      const lat = this.track.lateral(r.pos, gate.index);
-      let lane = -1; let best = 2.6;
-      LANES.forEach((l, i) => { const d = Math.abs(lat - l); if (d < best) { best = d; lane = i; } });
-      const q = gate.q;
-      const correct = lane >= 0 && q.options[lane] === q.answer;
-      if (r.isPlayer) {
-        const ans = gate.answered; let fast = false, ok = correct;
-        if (ans) { ok = ans.correct; fast = ans.fast; }
-        else {
-          // Drive-through mode: the lane you drove through is your answer
-          this.stats.asked++; if (correct) this.stats.correct++;
-          this.progress.record(q, correct);
-          this.stats.log.push({ q: q.text, answer: q.answer, picked: lane >= 0 ? q.options[lane] : null, correct });
-        }
-        if (r.laneLock !== null) r.easyLane = r.laneLock;
-        r.laneLock = null;
-        if (ok) {
-          this.stats.stars += fast ? 2 : 1;
-          this.applyBoost(r, fast ? 2.8 : 2.2, fast ? 1.55 : 1.42); this.confetti(r.pos, fast ? 80 : 50);
-          if (fast) this.sound.superTurbo(); else if (!ans) this.sound.correct();
-          this.ui.onFeedback({ correct: true, title: fast ? 'SUPER TURBO!' : 'TURBO!', text: `${q.text} = ${q.answer}` });
-        } else {
-          r.slow = ans ? 0.6 : 1.0; r.drift.active = false;
-          if (!ans) { this.sound.wrong(); this.shake = 0.2; }
-          this.ui.onFeedback({ correct: false, title: ans ? 'Keep going!' : 'OOPS!', text: `${q.text} = ${q.answer}` });
-        }
-        gate.answered = null; this.activeGate = null;
-        setTimeout(() => { if (this.gates?.includes(gate)) this.refreshGate(gate); }, 400);
-      } else {
-        if (correct) this.applyBoost(r, 1.6, 1.3); else r.slow = 0.9;
-        r.ai.gateChoice = null;
-      }
+      if (Math.random() < r.ai.skill) this.applyBoost(r, 1.6, 1.3); else r.slow = 0.9;
     }
   }
   checkBoostPads(r) {
@@ -675,18 +633,6 @@ export class Game {
     ai.laneTimer -= dt;
     if (ai.laneTimer <= 0) { ai.laneTimer = 2 + Math.random() * 3; ai.laneTarget = (Math.random() - 0.5) * 8; }
     let laneGoal = ai.laneTarget;
-    // Upcoming gate within 60 samples: choose a lane (correct with probability = skill)
-    for (const gate of this.gates) {
-      let d = gate.index - r.idx; if (d < 0) d += n;
-      if (d < 70) {
-        if (ai.gateChoice === null || ai.lastGate !== gate.index) {
-          ai.lastGate = gate.index;
-          const correctLane = gate.q.correctIndex;
-          ai.gateChoice = Math.random() < ai.skill ? correctLane : [0, 1, 2].filter((l) => l !== correctLane)[Math.floor(Math.random() * 2)];
-        }
-        laneGoal = LANES[ai.gateChoice];
-      }
-    }
     if (!r.item) for (const ii of this.track.itemIndices) { let d = ii - r.idx; if (d < 0) d += n; if (d < 40) laneGoal = LANES[(r.id + Math.floor(this.time / 10)) % 3]; }
     ai.lane = lerp(ai.lane, laneGoal, 1 - Math.exp(-2.5 * dt));
     // Steering towards a point ahead
@@ -714,7 +660,7 @@ export class Game {
   updateVisual(r, dt) {
     const k = r.kart; k.group.position.copy(r.pos);
     const spinAngle = r.spin > 0 ? (1.2 - r.spin) / 1.2 * Math.PI * 4 : 0;
-    k.group.rotation.set(0, r.heading + spinAngle + (r.drift.active ? -r.drift.dir * 0.45 : 0), 0);
+    k.group.rotation.set(0, r.heading + spinAngle + (r.drift.active ? -r.drift.dir * 0.45 : -(r.cornerSlide || 0) * 0.3), 0);
     // Tilt with the road slope
     if (r.groundTangent) { const pitch = Math.asin(clamp(r.groundTangent.y, -0.5, 0.5)); k.body.rotation.x = lerp(k.body.rotation.x, -pitch, 0.2); }
     const steerVis = r.isPlayer ? this.input.steer : (r.aiInput?.steer || 0);
@@ -724,11 +670,16 @@ export class Game {
     k.body.position.y = r.hop > 0 ? 0 : Math.sin(this.time * 25) * 0.015 * Math.abs(r.speed) / r.stats.max;
     r.wheelSpin += r.speed * dt / 0.38;
     for (const w of r.kart.wheels) { w.wheel.rotation.x = r.wheelSpin; if (w.front) w.pivot.rotation.y = r.visualSteer * 0.45; }
+    for (const w of k.wheels) w.pivot.position.y = (w.front ? 0.38 : 0.46) + (this.reducedMotion ? 0 : Math.sin(this.time * 18 + w.pivot.position.z) * 0.022 * clamp(Math.abs(r.speed) / r.stats.max, 0, 1));
     k.flames.visible = r.boost > 0; if (k.flames.visible) k.flames.scale.setScalar(0.8 + Math.random() * 0.5);
     k.bubble.visible = r.shield; if (r.shield) k.bubble.scale.setScalar(1 + Math.sin(this.time * 6) * 0.05);
     k.blob.visible = true; k.blob.position.y = -(r.pos.y - this.track.heightAt(r.idx)) + 0.03;
     // Character leans and bobs
     const ch = r.kart.character; ch.rotation.z = -r.visualTilt * 2; ch.userData.head.rotation.y = r.visualSteer * 0.5; ch.position.y = (ch.userData.baseY ?? 0.55) + Math.sin(this.time * 10 + r.id) * 0.02;
+    if (!this.reducedMotion) {
+      ch.rotation.x = lerp(ch.rotation.x, r.boost > 0 ? 0.14 : -0.025, 1 - Math.exp(-7 * dt));
+      if (r.finished) ch.position.y += Math.max(0, Math.sin(this.time * 5)) * 0.15;
+    }
     if (ch.userData.tail) ch.userData.tail.rotation.y = 0.4 + Math.sin(this.time * 7 + r.id) * 0.35;
   }
 
@@ -736,7 +687,7 @@ export class Game {
 
   cameraIntro(dt) {
     const p = this.player; const t = 1 - clamp(this.countdown / 4.2, 0, 1);
-    const a = Math.PI * 0.9 - t * Math.PI * 0.9 + p.heading;
+    const a = this.reducedMotion ? p.heading + Math.PI : Math.PI * 0.9 - t * Math.PI * 0.9 + p.heading;
     const r = 11 - t * 2.5; const h = 4.5 - t * 0.5;
     const target = new THREE.Vector3(p.pos.x + Math.sin(a) * r, p.pos.y + h, p.pos.z + Math.cos(a) * r);
     this.camera.position.lerp(target, 1 - Math.exp(-6 * dt));
@@ -745,17 +696,21 @@ export class Game {
   }
   updateCamera(dt) {
     const p = this.player; const fwd = new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading));
-    const lag = p.drift.active ? -p.drift.dir * 0.25 : 0;
+    const bend = this.track.sampleAt(p.idx).tangent.clone().cross(this.track.sampleAt(p.idx + 12).tangent).y;
+    const lag = this.reducedMotion ? 0 : (p.drift.active ? -p.drift.dir * 0.25 : 0) + clamp(bend, -0.3, 0.3) * 0.3;
     const dirBack = new THREE.Vector3(Math.sin(p.heading + lag), 0, Math.cos(p.heading + lag));
-    const dist = 8.5 + clamp(p.speed / p.stats.max, 0, 1.5) * 1.2 + (p.boost > 0 ? 1.0 : 0);
+    const dist = 8.5 + clamp(p.speed / p.stats.max, 0, 1.5) * 1.2 + (p.boost > 0 && !this.reducedMotion ? 1.0 : 0);
     const target = p.pos.clone().addScaledVector(dirBack, -dist).add(new THREE.Vector3(0, 4.0, 0));
-    if (p.finished) { const a = this.time * 0.6; target.set(p.pos.x + Math.sin(a) * 10, p.pos.y + 5, p.pos.z + Math.cos(a) * 10); }
+    if (p.finished && !this.reducedMotion) { const a = this.time * 0.6; target.set(p.pos.x + Math.sin(a) * 10, p.pos.y + 5, p.pos.z + Math.cos(a) * 10); }
     this.camera.position.lerp(target, 1 - Math.exp(-(p.finished ? 2 : 7) * dt));
     const look = p.pos.clone().addScaledVector(fwd, p.finished ? 0 : 7).add(new THREE.Vector3(0, 1.4, 0));
     if (this.shake > 0) { this.shake -= dt; look.x += (Math.random() - 0.5) * this.shake * 1.5; look.y += (Math.random() - 0.5) * this.shake * 1.5; }
     this.camera.lookAt(look);
-    const fov = this.baseFov() + (p.boost > 0 ? 14 : 0) + clamp(p.speed / p.stats.max - 0.8, 0, 0.5) * 10;
+    if (!this.reducedMotion && !p.finished) this.camera.rotateZ(clamp(-p.visualSteer * Math.abs(p.speed) / p.stats.max * 0.025, -0.035, 0.035));
+    const fov = this.baseFov() + (this.reducedMotion ? 0 : (p.boost > 0 ? 9 : 0) + clamp(p.speed / p.stats.max - 0.8, 0, 0.5) * 10);
     this.camera.fov = lerp(this.camera.fov, fov, 1 - Math.exp(-5 * dt)); this.camera.updateProjectionMatrix();
+    this.speedStreaks.visible = !this.reducedMotion && !p.finished && p.boost > 0;
+    this.speedStreaks.material.opacity = 0.12 + Math.sin(this.time * 22) * 0.035;
   }
 
   fadeNearCamera() {
@@ -776,36 +731,48 @@ export class Game {
     return [!!gp.buttons[14]?.pressed || gp.axes[0] < -0.6, !!gp.buttons[12]?.pressed || !!gp.buttons[0]?.pressed, !!gp.buttons[15]?.pressed || gp.axes[0] > 0.6];
   }
   openQuiz(gate) {
+    if (gate.lastAskedLap === this.player.lap) return;
+    if (gate.lastAskedLap >= 0) this.refreshGate(gate);
+    gate.lastAskedLap = this.player.lap;
     this.quiz = { gate, q: gate.q, t: 0, openedAt: performance.now(), answered: false, resultT: 0, bonusTime: this.bonusTime, pad: this.quizPad() };
     this.player.drift.active = false; this.player.drift.charge = 0;
     this.sound.quizOpen();
     this.ui.onQuizOpen(gate.q, this.bonusTime);
   }
-  answerQuiz(choice) {
-    const z = this.quiz; if (!z || z.answered || performance.now() - z.openedAt < 250) return;
-    const q = z.q; const correct = q.options[choice] === q.answer; const fast = correct && z.t <= z.bonusTime;
+  answerQuiz(choice, timeout = false) {
+    const z = this.quiz; if (!z || z.answered || this.paused || (!timeout && performance.now() - z.openedAt < 250)) return;
+    timeout = timeout || z.t >= ANSWER_SECONDS;
+    if (!timeout && (!Number.isInteger(choice) || choice < 0 || choice > 2)) return;
+    const q = z.q; const correct = !timeout && q.options[choice] === q.answer; const fast = correct && z.t <= 3;
+    z.t = Math.min(z.t, ANSWER_SECONDS);
     z.answered = true; z.correct = correct; z.resultT = 0;
-    z.gate.answered = { choice, correct, fast };
-    this.player.laneLock = LANES[choice];
     this.stats.asked++; if (correct) this.stats.correct++; this.stats.times.push(z.t);
     this.progress.record(q, correct);
-    this.stats.log.push({ q: q.text, answer: q.answer, picked: q.options[choice], correct, time: z.t });
-    // Light up the right gate so the answer is visible in the world too
-    z.gate.laneMats.forEach((m, i) => { if (i === q.correctIndex) { m.emissive.setHex(0x7fe39a); m.emissiveIntensity = 0.9; } else { m.emissiveIntensity = 0.05; } });
+    this.stats.log.push({ q: q.text, answer: q.answer, picked: timeout ? null : q.options[choice], correct, time: z.t, timedOut: timeout });
+    z.reward = correct ? answerBoost(z.t) : null;
+    if (correct) this.stats.stars += fast ? 2 : 1;
     if (correct) this.sound.correct(); else this.sound.wrong();
-    this.ui.onQuizResult({ choice, correct, fast, correctIndex: q.correctIndex, answer: q.answer, text: q.text });
+    this.ui.onQuizResult({ choice: timeout ? null : choice, correct, fast, timedOut: timeout, correctIndex: q.correctIndex, answer: q.answer, text: q.text, reward: z.reward });
   }
   updateQuiz(dt) {
-    const z = this.quiz; z.t += dt;
+    const z = this.quiz; if (!z || this.paused) return;
     if (!z.answered) {
-      this.ui.onQuizTick(Math.max(0, 1 - z.t / z.bonusTime));
+      z.t = Math.min(ANSWER_SECONDS, z.t + dt);
+      this.ui.onQuizTick(Math.max(0, 1 - z.t / ANSWER_SECONDS), Math.max(0, ANSWER_SECONDS - z.t));
+      if (z.t >= ANSWER_SECONDS) { this.answerQuiz(null, true); return; }
       const pad = this.quizPad();
       for (let i = 0; i < 3; i++) if (pad[i] && !z.pad[i]) { this.answerQuiz(i); break; }
       z.pad = pad;
       if (this.autoPilot && z.t > 0.4) { const skill = this.player.ai?.skill ?? 1; this.answerQuiz(Math.random() < skill ? z.q.correctIndex : (z.q.correctIndex + 1) % 3); }
     } else {
       z.resultT += dt;
-      if (z.resultT > (z.correct ? 0.9 : 1.8)) { this.quiz = null; this.ui.onQuizClose(); }
+      if (z.resultT > (z.correct ? 0.9 : 1.8)) {
+        const p = this.player;
+        if (z.correct) { p.slow = 0; this.applyBoost(p, z.reward.duration, z.reward.power); this.confetti(p.pos, 50, [0xffc34d, 0xffe79e, 0xfff8de]); }
+        else { p.boost = 0; p.boostPower = 1; p.slow = 2.2; p.speed *= 0.65; }
+        this.quiz = null; this.keys = {}; this.ui.onQuizClose();
+        this.ui.onFeedback({ correct: z.correct, title: z.correct ? 'TURBO!' : 'Slowed down!', text: `${z.q.text} = ${z.q.answer}` });
+      }
     }
   }
 

@@ -5,7 +5,7 @@ import { toon, clay } from './track.js';
 
 // ---------- Materials (made per kart so one kart can fade without affecting others) ----------
 let treadTex = null;
-const paintMat = (hex) => clay(hex);
+const paintMat = (hex) => clay(hex, { roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.2, envMapIntensity: 0.85, normalScale: new THREE.Vector2(0.045, 0.045) });
 const chromeMat = () => clay(0xeef0f8, { roughness: 0.55, metalness: 0.1, sheen: 0.8, envMapIntensity: 0.6 });
 const darkMat = () => clay(0x676c8a);
 const rubberMat = () => clay(0x585d78, { roughness: 0.95, sheen: 0.3 });
@@ -89,6 +89,13 @@ export function buildKart(ch) {
 
   // Bodywork
   body.add(mesh(geo('body', bodyGeometry), mats.paint));
+  // Sculpted wheel arches give the little racer a rounded, toy-car silhouette.
+  const archG = geo('wheelarch', () => new THREE.TorusGeometry(0.49, 0.105, 8, 20, Math.PI).rotateY(Math.PI / 2));
+  for (const x of [-0.86, 0.86]) for (const z of [-0.95, 1.12]) {
+    const arch = mesh(archG, mats.paint); arch.position.set(x, 0.44, z); body.add(arch);
+  }
+  const tailLampG = geo('taillamp', () => new RoundedBoxGeometry(0.28, 0.12, 0.08, 2, 0.035));
+  for (const x of [-0.58, 0.58]) { const lamp = mesh(tailLampG, glowMat(0xff557e, 0.7)); lamp.position.set(x, 0.62, -1.43); body.add(lamp); }
   // Side pods with a contrasting stripe
   const podG = geo('pod', () => new THREE.CapsuleGeometry(0.2, 1.15, 8, 16).rotateX(Math.PI / 2));
   const stripeG = geo('stripe', () => new THREE.CapsuleGeometry(0.205, 0.5, 6, 16).rotateX(Math.PI / 2));
