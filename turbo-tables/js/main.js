@@ -96,8 +96,9 @@ const ui = {
     $('quizQ').textContent = `${q.text} = ?`;
     q.options.forEach((o, i) => { $('qa' + i).textContent = o; });
     document.querySelectorAll('.qopt').forEach((b) => { b.classList.remove('right', 'wrong', 'dim'); b.disabled = false; });
-    $('quizCard').className = 'quizCard'; $('quizTitle').textContent = 'Maths gate! Pick the answer';
-    $('bonusLabel').textContent = 'Answer before the bar runs out for a super turbo';
+    $('quizCard').className = 'quizCard'; $('quizTitle').textContent = 'Maths boost! Pick the answer';
+    $('quizCountdown').setAttribute('aria-valuenow','10'); $('quizCountdown').setAttribute('aria-valuetext','10 seconds remaining'); $('quizCountdown').classList.remove('urgent');
+    $('bonusLabel').textContent = '10 seconds. The faster you answer, the bigger your boost!';
     $('bonusBar').style.transform = 'scaleX(1)';
     $('question').classList.remove('show'); $('feedback').classList.remove('show');
     $('quiz').hidden = false;
@@ -106,20 +107,21 @@ const ui = {
     for (const k in touch) if (typeof touch[k] === 'boolean') touch[k] = false;
     document.querySelectorAll('.tbtn.active').forEach((el) => el.classList.remove('active'));
   },
-  onQuizTick(f) { $('bonusBar').style.transform = `scaleX(${f})`; if (f === 0) $('bonusLabel').textContent = 'Take your time. You still get a turbo for the right answer.'; },
-  onQuizResult({ choice, correct, fast, correctIndex, answer, text }) {
+  onQuizTick(f, seconds) { $('bonusBar').style.transform = `scaleX(${f})`; $('quizCountdown').setAttribute('aria-valuenow',seconds.toFixed(1)); $('quizCountdown').setAttribute('aria-valuetext',`${Math.ceil(seconds)} seconds remaining`); $('quizCountdown').classList.toggle('urgent', seconds <= 3); },
+  onQuizResult({ choice, correct, fast, timedOut, correctIndex, answer, text, reward }) {
     document.querySelectorAll('.qopt').forEach((b, i) => { b.disabled = true; if (i === correctIndex) b.classList.add('right'); else if (i === choice) b.classList.add('wrong'); else b.classList.add('dim'); });
     $('quizCard').className = 'quizCard ' + (correct ? 'good' : 'bad');
-    $('quizTitle').textContent = correct ? (fast ? 'Super turbo coming up!' : 'Correct! Turbo coming up!') : 'Nearly! Here is the answer';
+    $('quizTitle').textContent = correct ? (fast ? 'Super turbo!' : 'Correct! Turbo boost!') : timedOut ? 'Time’s up! Here is the answer' : 'Here is the answer';
     $('quizQ').textContent = `${text} = ${answer}`;
-    $('bonusLabel').textContent = correct ? 'Drive through the green gate' : 'Remember this one. It will come back.';
+    $('quizCountdown').setAttribute('aria-valuetext',timedOut?'Time is up':'Answer submitted');
+    $('bonusLabel').textContent = correct ? `${reward.duration.toFixed(1)} second boost coming up!` : 'A short slowdown, then keep racing. You can get the next one!';
   },
   onQuizClose() { $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
   onFinish(results) { showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:setup.easy}); },
 };
 
 // ---------- Screens ----------
-const screens = ['title', 'setup', 'hud', 'pause', 'results', 'loading'];
+const screens = ['connecting', 'setup', 'hud', 'pause', 'results', 'loading'];
 function show(...ids) { for (const s of screens) $(s).hidden = !ids.includes(s); }
 
 const game = new Game({ canvas: $('gl'), sound, ui });
@@ -148,16 +150,15 @@ function makePortraits() {
 function buildSetup() {
   if (!PICKABLE.some((c) => c.id === setup.charId)) setup.charId = PICKABLE[0].id;
   if (!Object.keys(portraits).length) makePortraits();
-  $('name').value = setup.name;
   $('levels').innerHTML = LEVELS.map((l) => `<button class="chip ${l.id === setup.levelId ? 'on' : ''}" data-level="${l.id}">${l.name.split(' ')[0]}<small>class</small></button>`).join('');
-  if(host){$('levels').hidden=true;$('levels').previousElementSibling.textContent=`${host.name} · ${LEVELS.find(l=>l.id===setup.levelId).name}`;}
+  if(host){$('levels').hidden=true;$('levels').previousElementSibling.textContent=`Ready, ${host.name}?`;}
   const level = LEVELS.find((l) => l.id === setup.levelId);
-  $('levelBlurb').textContent = `Age ${level.age}: ${level.blurb}`;
+  $('levelBlurb').textContent = `${level.name} · ${level.blurb}`;
   const on = opsFor(level);
   $('ops').innerHTML = level.ops.map((op) => `<button class="chip ${on.includes(op) ? 'on' : ''}" data-op="${op}" aria-pressed="${on.includes(op)}">${OP_SYMBOL[op]}<small>${OP_SHORT[op]}</small></button>`).join('');
-  $('racers').innerHTML = PICKABLE.map((c) => `<button class="racer ${c.id === setup.charId ? 'on' : ''}" data-char="${c.id}">${portraits[c.id] ? `<img src="${portraits[c.id]}" alt="">` : ''}<b>${c.name}</b><small>${c.species}</small></button>`).join('');
+  $('racers').innerHTML = PICKABLE.map((c) => `<button class="racer ${c.id === setup.charId ? 'on' : ''}" data-char="${c.id}" aria-pressed="${c.id === setup.charId}">${portraits[c.id] ? `<img src="${portraits[c.id]}" alt="">` : ''}<b>${c.name}</b><small>${c.species}</small></button>`).join('');
   renderTilt(); renderEasy();
-  $('tracks').innerHTML = TRACKS.map((t) => `<button class="track ${t.id === setup.trackId ? 'on' : ''}" data-track="${t.id}"><div class="pic ${t.id}"></div><b>${t.name}</b></button>`).join('');
+  $('tracks').innerHTML = TRACKS.map((t) => `<button class="track ${t.id === setup.trackId ? 'on' : ''}" data-track="${t.id}" aria-pressed="${t.id === setup.trackId}"><img class="pic" src="../assets/turbo-track-${t.id}.jpg" alt="" width="640" height="360"><b>${t.name}</b></button>`).join('');
 }
 $('levels').addEventListener('click', (e) => { const b = e.target.closest('[data-level]'); if (!b) return; setup.levelId = +b.dataset.level; sound.click(); buildSetup(); });
 // Topics: each class remembers which kinds of sums to practise. At least one stays on.
@@ -171,11 +172,9 @@ $('ops').addEventListener('click', (e) => {
 });
 $('racers').addEventListener('click', (e) => { const b = e.target.closest('[data-char]'); if (!b) return; setup.charId = b.dataset.char; sound.click(); saveSetup();buildSetup(); });
 $('tracks').addEventListener('click', (e) => { const b = e.target.closest('[data-track]'); if (!b) return; setup.trackId = b.dataset.track; sound.click(); saveSetup();buildSetup(); });
-$('name').addEventListener('input', (e) => { setup.name = e.target.value; });
 
 // ---------- Flow ----------
-$('btnStart').addEventListener('click', () => { sound.resume(); sound.click(); setup.name = $('name').value.trim(); saveSetup(); buildSetup(); show('setup'); });
-$('btnBack').addEventListener('click', () => { if(host){notify('exit');return;}sound.click(); show('title'); });
+$('btnBack').addEventListener('click', () => notify('exit'));
 $('btnGo').addEventListener('click', startRace);
 $('btnAgain').addEventListener('click', startRace);
 $('btnSetup').addEventListener('click', () => { sound.click(); game.dispose(); buildSetup(); show('setup'); });
@@ -208,10 +207,10 @@ function showResults(r) {
   const acc = r.asked ? Math.round(r.correct / r.asked * 100) : 0;
   $('rPlace').innerHTML = `${r.rank}<sup>${ORD(r.rank)}</sup>`;
   $('rTitle').textContent = r.rank === 1 ? `${r.character.name} wins!` : r.rank <= 3 ? 'On the podium!' : acc >= 80 ? 'Maths superstar!' : 'Good race!';
-  $('rSub').textContent = `${setup.name || 'Racer'} · ${r.level.name} · ${acc >= 90 ? 'Nearly perfect answers.' : acc >= 70 ? 'Great answering under pressure.' : 'Keep practising, every gate helps.'}`;
+  $('rSub').textContent = `${setup.name || 'Racer'} · ${r.level.name} · ${acc >= 90 ? 'Nearly perfect answers.' : acc >= 70 ? 'Great answering under pressure.' : 'Keep practising, every question helps.'}`;
   $('rScores').innerHTML = [
     [fmtTime(r.time), 'Race time'], [isFinite(r.bestLap) ? fmtTime(r.bestLap) : '–', 'Best lap'],
-    [`${r.correct}/${r.asked}`, 'Gates correct'], [`${acc}%`, 'Accuracy'], [`⭐ ${r.stars}`, 'Stars earned'],
+    [`${r.correct}/${r.asked}`, 'Questions correct'], [`${acc}%`, 'Accuracy'], [`⭐ ${r.stars}`, 'Stars earned'],
     ...(r.avgTime !== null && r.avgTime !== undefined ? [[`${r.avgTime.toFixed(1)}s`, 'Average answer time']] : []),
   ].map(([v, l]) => `<div class="score"><b>${v}</b><small>${l}</small></div>`).join('');
   $('rWeak').innerHTML = r.weak.length ? r.weak.map((k) => `<span>${describeFact(k)}</span>`).join('') : '<span>Nothing yet. You know these!</span>';
@@ -221,8 +220,8 @@ function showResults(r) {
 
 // ---------- Easy driving ----------
 function renderEasy() {
-  const b = $('btnEasy'); b.textContent = `Easy driving: ${setup.easy ? 'On' : 'Off'}`; b.classList.toggle('on', setup.easy); b.setAttribute('aria-pressed', String(setup.easy));
-  $('easyMsg').textContent = setup.easy ? 'The kart drives itself round the bends. Just press left and right to move across the road.' : '';
+  const b = $('btnEasy'); b.textContent = `Driving help: ${setup.easy ? 'On' : 'Off'}`; b.classList.toggle('on', setup.easy); b.setAttribute('aria-pressed', String(setup.easy));
+  $('easyMsg').textContent = setup.easy ? 'We handle the accelerator and give gentle steering help. You steer around the bends!' : 'You control the accelerator and steering.';
 }
 $('btnEasy').addEventListener('click', () => { sound.click(); setup.easy = !setup.easy; saveSetup(); renderEasy(); });
 
@@ -280,8 +279,8 @@ for (const [id, key] of [['tLeft', 'left'], ['tRight', 'right'], ['tGas', 'gas']
 }
 
 const touchDevice=navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches;
-if(host){$('btnBack').textContent='Back to games';$('btnTilt').hidden=true;$('tiltMsg').hidden=true;}
+if(host){$('btnBack').textContent='← Back to games';$('btnTilt').hidden=true;$('tiltMsg').hidden=true;}
 window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){game.togglePause(true);sound.setMuted(true);game.dispose();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
 buildSetup();
-show(host?'setup':'title');notify('loaded');
+show('setup');notify('loaded');

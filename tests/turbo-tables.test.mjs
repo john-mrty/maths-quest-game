@@ -33,3 +33,18 @@ test('all transitive game imports are cached offline and the external font depen
  visit('turbo-tables/js/main.js');assert.ok(seen.size>20);assert.doesNotMatch(fs.readFileSync(new URL('../turbo-tables/index.html',import.meta.url),'utf8'),/https?:\/\//);
  const adventure=fs.readFileSync(new URL('../adventure.js',import.meta.url),'utf8');assert.match(adventure,/renderHome\(l,save\);tablesTile\(l,save\);/);assert.doesNotMatch(adventure,/renderHome\(l,save\);racerTile/);
 });
+test('old standalone links return to Maths Quest to select a learner instead of collecting another name',()=>{
+ let destination;const window={};window.parent=window;
+ const source=fs.readFileSync(new URL('../turbo-tables/js/host.js',import.meta.url),'utf8').replaceAll('export function','function').replaceAll('export const','const');
+ vm.runInNewContext('(async()=>{'+source+'})()',{window,location:{search:'',href:'https://app.test/turbo-tables/index.html',replace:url=>destination=url},URL,URLSearchParams});
+ assert.equal(destination,'https://app.test/?game=turbo-tables');
+});
+test('a requested racer opens once after learner selection and consumes only its own URL parameter',()=>{
+ const source=fs.readFileSync(new URL('../adventure.js',import.meta.url),'utf8'),start=source.indexOf('function tablesTile(l,save){'),end=source.indexOf('window.questAdventure=',start);
+ let opens=0,replaced;const jobs=[];
+ const document={getElementById:id=>id==='beatButton'?{before(){}}:null,createElement:()=>({click(){opens++;}})};
+ vm.runInNewContext('let miniActive=false,requestedTurboTables=true;'+source.slice(start,end)+'tablesTile({},()=>{});tablesTile({},()=>{});',{
+  document,location:{href:'https://app.test/?qa=1&game=turbo-tables'},URL,history:{state:null,replaceState:(_state,_title,url)=>replaced=String(url)},queueMicrotask:fn=>jobs.push(fn)
+ });
+ assert.equal(jobs.length,1);jobs[0]();assert.equal(opens,1);assert.equal(replaced,'https://app.test/?qa=1');
+});
