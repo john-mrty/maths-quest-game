@@ -94,15 +94,15 @@ export class Game {
     const gp = navigator.getGamepads ? Array.from(navigator.getGamepads()).find((g) => g) : null;
     let steer = 0;
     if (k.ArrowLeft || k.KeyA || t.left) steer += 1; if (k.ArrowRight || k.KeyD || t.right) steer -= 1;
+    if (steer === 0 && typeof t.padSteer === 'number') steer = t.padSteer;
     if (steer === 0 && typeof t.tiltSteer === 'number') steer = t.tiltSteer;
     let throttle = (k.ArrowUp || k.KeyW || t.gas) ? 1 : 0, reverse = (k.ArrowDown || k.KeyS || t.reverse) ? 1 : 0;
-    let drift = !!(k.Space || k.ShiftLeft || k.ShiftRight || t.drift);
+    let drift = false;
     let item = !!(k.KeyE || k.Enter || k.ControlLeft || k.KeyQ || t.item);
     if (gp) {
       if (Math.abs(gp.axes[0]) > 0.15) steer = -gp.axes[0];
       if (gp.buttons[0]?.pressed || gp.buttons[7]?.value > 0.2) throttle = Math.max(throttle, gp.buttons[7]?.value || 1);
       if (gp.buttons[2]?.pressed || gp.buttons[6]?.value > 0.2) reverse = 1;
-      if (gp.buttons[1]?.pressed || gp.buttons[5]?.pressed) drift = true;
       if (gp.buttons[3]?.pressed || gp.buttons[4]?.pressed) item = true;
       if (gp.buttons[14]?.pressed) steer = 1; if (gp.buttons[15]?.pressed) steer = -1;
     }
@@ -382,31 +382,15 @@ export class Game {
     if (r.speed > max) r.speed = lerp(r.speed, max, 1 - Math.exp(-3 * dt));
     r.speed = clamp(r.speed, -st.max * 0.35, max + 1);
 
-    // Drift & hop
+    // Grip eases continuously into a slide as speed and steering build.
+    // Straightening the wheel smoothly restores grip; no drift button or mode.
     const d = r.drift;
-    if (!spinning && inp.driftPressed && r.hop <= 0 && Math.abs(r.speed) > st.max * 0.3) { r.hop = 0.32; if (r.isPlayer) this.sound.hop(); }
-    if (r.hop > 0) { r.hop -= dt; if (r.hop <= 0 && inp.drift && Math.abs(inp.steer) > 0.3 && r.speed > st.max * 0.3) { d.active = true; d.dir = Math.sign(inp.steer); d.charge = 0; } }
-    if (d.active && (!inp.drift || r.speed < st.max * 0.25 || spinning)) {
-      // release: mini turbo
-      if (d.charge > 2.2) this.applyBoost(r, 1.1, 1.3); else if (d.charge > 1) this.applyBoost(r, 0.6, 1.2);
-      if (r.isPlayer && d.charge > 1) this.sound.miniTurbo();
-      d.active = false; d.charge = 0;
-    }
+    d.active = false; d.charge = 0; r.hop = 0;
     const speedF = clamp(r.speed / st.max, -1, 1);
-    const slideTarget = !spinning && !r.offroad && !d.active && r.speed > st.max * 0.35 && Math.abs(inp.steer) > 0.18 ? inp.steer * Math.abs(speedF) : 0;
+    const slideTarget = !spinning && !r.offroad && r.speed > st.max * 0.35 && Math.abs(inp.steer) > 0.18 ? inp.steer * Math.abs(speedF) : 0;
     r.cornerSlide = lerp(r.cornerSlide || 0, slideTarget, 1 - Math.exp(-5 * dt));
-    let turn = 0;
-    if (!spinning) {
-      if (d.active) {
-        d.charge += dt * (1 + Math.abs(inp.steer) * 0.5);
-        // In a drift the kart turns hard in the drift direction, steering tightens or loosens it
-        turn = d.dir * (st.handling * 0.9 + inp.steer * d.dir * st.handling * 0.6) * dt * Math.abs(speedF);
-        r.lateralVel = lerp(r.lateralVel, -d.dir * 7, 1 - Math.exp(-3 * dt));
-      } else {
-        turn = inp.steer * st.handling * (1.1 - 0.35 * Math.abs(speedF)) * dt * speedF;
-        r.lateralVel = lerp(r.lateralVel, -r.cornerSlide * 1.4, 1 - Math.exp(-6 * dt));
-      }
-    } else { r.lateralVel = lerp(r.lateralVel, 0, 1 - Math.exp(-3 * dt)); }
+    const turn = spinning ? 0 : inp.steer * st.handling * (1.1 - 0.35 * Math.abs(speedF)) * dt * speedF;
+    r.lateralVel = lerp(r.lateralVel, spinning ? 0 : -r.cornerSlide * 2.8, 1 - Math.exp(-6 * dt));
     r.heading += turn;
 
     // Move
@@ -666,7 +650,7 @@ export class Game {
     if (r.groundTangent) { const pitch = Math.asin(clamp(r.groundTangent.y, -0.5, 0.5)); k.body.rotation.x = lerp(k.body.rotation.x, -pitch, 0.2); }
     const steerVis = r.isPlayer ? this.input.steer : (r.aiInput?.steer || 0);
     r.visualSteer = lerp(r.visualSteer, steerVis, 0.2);
-    r.visualTilt = lerp(r.visualTilt, (r.drift.active ? r.drift.dir * 0.12 : 0) - r.visualSteer * 0.05 * Math.abs(r.speed) / r.stats.max, 0.15);
+    r.visualTilt = lerp(r.visualTilt, (r.cornerSlide || 0) * 0.12 - r.visualSteer * 0.05 * Math.abs(r.speed) / r.stats.max, 0.15);
     k.body.rotation.z = r.visualTilt;
     k.body.position.y = r.hop > 0 ? 0 : Math.sin(this.time * 25) * 0.015 * Math.abs(r.speed) / r.stats.max;
     r.wheelSpin += r.speed * dt / 0.38;

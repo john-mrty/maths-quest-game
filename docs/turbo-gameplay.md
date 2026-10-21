@@ -21,3 +21,9 @@ The later driving-help adjustment replaces automatic lane-following with direct 
 Landscape phone feedback sits at the bottom centre, away from the horizon. Kart paint uses a soft satin finish. Racing setup displays the active learner’s latest avatar or custom profile photo. Tilt steering is available beside Driving help on touch devices, remembers the learner’s preference and requests motion access from the tap. The embedded frame delegates accelerometer and gyroscope access; missing readings or denied permission restore button controls. Tilt recentres after rotating the device.
 
 From 2nd class, opponents have higher answer accuracy and pace, brake less on curves and ease off less when ahead; each later class increases pace and accuracy further. 1st class keeps its existing settings. All racers still pause for maths questions. Physical mobile motion access and subjective race balance need device playtesting.
+
+## Natural cornering and touch pad
+
+Drifting now comes from speed and steering rather than holding a button. The car slides progressively into bends and restores grip when steering straightens. Removed the drift button, hop trigger, manual drift charge and mini-turbo release. Keyboard steering/acceleration and gamepad steering/acceleration remain unchanged.
+
+Touch devices get a circular left thumb pad. Holding anywhere on it supplies full acceleration, including its centre and bottom half; sideways movement provides analogue steering with a centre dead zone. Pointer capture keeps the press active outside the circle. Lifting, cancellation, lost capture, window blur, a maths question or pause clears it. Additional fingers cannot steal the pad. Tilt steering still works, with the pad serving as a forgiving accelerator. Item and reverse remain on the right. The pad is hidden without touch capability.

@@ -253,7 +253,7 @@ body.touch .qopt .key { display: none; }
       </div>
       <p class="sub optMsg" id="easyMsg"></p>
       <p class="sub optMsg" id="tiltMsg"></p>
-      <p class="sub keys"><kbd>↑</kbd> go · <kbd>←</kbd> <kbd>→</kbd> steer · <kbd>Space</kbd> drift · <kbd>E</kbd> item · <kbd>↓</kbd> reverse</p>
+      <p class="sub keys"><kbd>↑</kbd> go · <kbd>←</kbd> <kbd>→</kbd> steer · <kbd>E</kbd> item · <kbd>↓</kbd> reverse</p>
     </div>
     <button class="linkBtn" id="btnBack">Change name</button>
   </div>
@@ -289,8 +289,8 @@ body.touch .qopt .key { display: none; }
     <div id="rotate">Turn your device sideways for the best view</div>
     <div class="tiny"><button class="iconBtn" id="btnMute" title="Mute">🔊</button><button class="iconBtn" id="btnPause" title="Pause">⏸</button></div>
     <div id="touch">
-      <div class="tbtn" id="tLeft">◀</div><div class="tbtn" id="tRight">▶</div>
-      <div class="tbtn" id="tGas">GO</div><div class="tbtn" id="tReverse">Reverse</div><div class="tbtn" id="tDrift">Drift</div><div class="tbtn" id="tItem">Item</div>
+      <div id="drivePad" aria-label="Hold to accelerate, slide left or right to steer"><span class="padArrows" aria-hidden="true">◀　 GO　 ▶</span><span id="driveKnob"></span></div>
+      <div class="tbtn" id="tReverse">Reverse</div><div class="tbtn" id="tItem">Item</div>
     </div>
   </div>
 

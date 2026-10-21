@@ -42,3 +42,12 @@ h1,h2,h3,.quizQ,.racer b,.track b{font-weight:850;letter-spacing:-.04em}
 }
 
 .learnerPortrait{width:52px;height:52px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:12px;border:3px solid #fff;box-shadow:0 2px 6px #39235b20}
+
+#drivePad{display:none;position:absolute;left:max(18px,env(safe-area-inset-left,0px));bottom:calc(var(--pad-b) + 6px);width:148px;height:148px;border-radius:50%;border:3px solid #fff;background:#fffaf0bb;box-shadow:0 4px 0 #47396755;touch-action:none;user-select:none;pointer-events:auto;align-items:center;justify-content:center;color:var(--ink)}
+body.touch #drivePad{display:flex}
+#drivePad.active{background:#d4f4cddd}
+.padArrows{font-size:16px;font-weight:800;pointer-events:none}
+#driveKnob{position:absolute;width:54px;height:54px;border-radius:50%;background:#7655e866;border:3px solid #fff;pointer-events:none}
+body.touch #tItem{right:max(18px,env(safe-area-inset-right,0px));bottom:calc(var(--pad-b) + 6px)}
+#drift{display:none}
+@media(orientation:landscape) and (max-height:500px){#drivePad{width:124px;height:124px}}
