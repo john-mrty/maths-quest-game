@@ -20,7 +20,7 @@ const saveSetup = () => { if(host){notify('setup',setup);return;}try { localStor
 const sound = new Sound();
 if(host)sound.setMuted(host.sound===false);
 $('btnMute').textContent=sound.muted?'🔇':'🔊';
-const touch = { left: false, right: false, gas: false, reverse: false, drift: false, item: false, tiltSteer: null };
+const touch = { left: false, right: false, gas: false, reverse: false, drift: false, item: false, tiltSteer: null, padSteer: null };
 if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
 
 // ---------- HUD / UI bridge ----------
@@ -91,8 +91,9 @@ const ui = {
     tick();
   },
   onItemUsed() { hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
-  onPause(p) { $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
+  onPause(p) { if(p) releasePad(); $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
   onQuizOpen(q) {
+    releasePad();
     $('quizQ').textContent = `${q.text} = ?`;
     q.options.forEach((o, i) => { $('qa' + i).textContent = o; });
     document.querySelectorAll('.qopt').forEach((b) => { b.classList.remove('right', 'wrong', 'dim'); b.disabled = false; });
@@ -273,16 +274,42 @@ document.querySelectorAll('.qopt').forEach((b) => b.addEventListener('pointerdow
 
 // ---------- Touch controls ----------
 game.setTouch(touch);
-for (const [id, key] of [['tLeft', 'left'], ['tRight', 'right'], ['tGas', 'gas'], ['tReverse', 'reverse'], ['tDrift', 'drift'], ['tItem', 'item']]) {
+for (const [id, key] of [['tReverse', 'reverse'], ['tItem', 'item']]) {
   const el = $(id);
   const on = (e) => { e.preventDefault(); touch[key] = true; el.classList.add('active'); };
   const off = (e) => { e.preventDefault(); touch[key] = false; el.classList.remove('active'); };
   el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
 }
 
+// One thumb steers and accelerates. Pointer capture keeps gas held even
+// when the thumb slips beyond the circle; only lifting or cancelling releases it.
+const pad = $('drivePad'), knob = $('driveKnob');
+let padPointer = null;
+function releasePad() {
+  padPointer = null; touch.gas = false; touch.padSteer = null;
+  knob.style.transform = ''; pad.classList.remove('active');
+}
+function movePad(e) {
+  if (e.pointerId !== padPointer) return;
+  const rect = pad.getBoundingClientRect(), radius = rect.width / 2;
+  const x = Math.max(-1, Math.min(1, (e.clientX - rect.left - radius) / (radius * 0.75)));
+  const y = Math.max(-1, Math.min(1, (e.clientY - rect.top - radius) / (radius * 0.75)));
+  touch.gas = true;
+  touch.padSteer = tilt.on ? null : (Math.abs(x) < 0.16 ? 0 : -Math.sign(x) * (Math.abs(x) - 0.16) / 0.84);
+  const scale = Math.max(1, Math.hypot(x, y));
+  knob.style.transform = `translate(${x / scale * radius * 0.5}px,${y / scale * radius * 0.5}px)`;
+}
+pad.addEventListener('pointerdown', e => {
+  if (padPointer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  e.preventDefault(); padPointer = e.pointerId; pad.setPointerCapture(e.pointerId);
+  pad.classList.add('active'); movePad(e);
+});
+pad.addEventListener('pointermove', movePad);
+for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(name, e => { if(e.pointerId === padPointer) releasePad(); });
+window.addEventListener('blur', releasePad);
 const touchDevice=navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches;
 if(host){$('btnBack').textContent='← Back to games';}
 window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){game.togglePause(true);sound.setMuted(true);game.dispose();}});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){releasePad();game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
 buildSetup();
 show('setup');notify('loaded');

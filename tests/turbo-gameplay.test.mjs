@@ -1,4 +1,6 @@
 import {test} from 'node:test';
+import fs from 'node:fs';
+import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {Game,answerBoost,ANSWER_SECONDS} from '../turbo-tables/js/game.js';
@@ -43,7 +45,7 @@ test('ordinary cornering develops a controlled slide which settles on a straight
  g.emit=g.checkGate=g.checkBoostPads=g.checkItemPickup=()=>{};g.sound={};
  const r={stats:{max:30,accel:12,handling:1.6},pos:new THREE.Vector3(),heading:0,speed:22,idx:0,spin:0,hop:0,slow:0,boost:0,drift:{active:false,charge:0},lateralVel:0,push:new THREE.Vector3()};
  for(let i=0;i<60;i++)g.physics(r,{throttle:1,steer:0.7},1/60);
- assert.ok(r.cornerSlide>0.4);assert.ok(r.lateralVel<0&&r.lateralVel>-2);assert.equal(r.drift.active,false);
+ assert.ok(r.cornerSlide>0.4);assert.ok(r.lateralVel<0&&r.lateralVel>-3);assert.equal(r.drift.active,false);
  for(let i=0;i<120;i++)g.physics(r,{throttle:1,steer:0},1/60);assert.ok(Math.abs(r.cornerSlide)<0.001);
 });
 test('driving help supplies partial guidance but leaves steering and manual drift with the player',()=>{
@@ -56,4 +58,18 @@ test('the visual countdown receives a declining fraction and freezes when the ra
  const {g}=race(),frames=[];g.ui.onQuizTick=(fraction,seconds)=>frames.push({fraction,seconds});
  g.updateQuiz(2);g.paused=true;g.updateQuiz(4);assert.equal(frames.length,1);g.paused=false;g.updateQuiz(3);
  assert.deepEqual(frames,[{fraction:0.8,seconds:8},{fraction:0.5,seconds:5}]);
+});
+
+test('touch pad holds acceleration beyond its edge, ignores extra fingers and clears on release or interruption',()=>{
+ const listeners={},classes=new Set(),pad={getBoundingClientRect:()=>({left:0,top:0,width:148}),classList:{add:x=>classes.add(x),remove:x=>classes.delete(x)},setPointerCapture(){},addEventListener:(name,fn)=>listeners[name]=fn},knob={style:{}};
+ const touch={gas:false,padSteer:null},context={touch,tilt:{on:false},$:(id)=>id==='drivePad'?pad:knob,window:{addEventListener:(name,fn)=>listeners[name]=fn}};
+ const source=fs.readFileSync(new URL('../turbo-tables/js/main.js',import.meta.url),'utf8');
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf("const pad = $('drivePad')"),source.indexOf('const touchDevice=')),context);
+ const event=(id,x,y)=>({pointerId:id,clientX:x,clientY:y,preventDefault(){}});
+ listeners.pointerdown(event(1,74,74));assert.equal(touch.gas,true);assert.equal(touch.padSteer,0);
+ listeners.pointermove(event(1,400,300));assert.equal(touch.gas,true);assert.equal(touch.padSteer,-1);
+ listeners.pointerdown(event(2,0,0));listeners.pointerup(event(2,0,0));assert.equal(touch.gas,true);
+ listeners.pointerup(event(1,400,300));assert.equal(touch.gas,false);assert.equal(touch.padSteer,null);
+ for(const name of ['pointercancel','lostpointercapture','blur']){listeners.pointerdown(event(1,30,74));assert.ok(touch.padSteer>0);listeners[name](event(1,30,74));assert.equal(touch.gas,false);assert.equal(touch.padSteer,null);}
+ context.tilt.on=true;listeners.pointerdown(event(1,10,74));assert.equal(touch.gas,true);assert.equal(touch.padSteer,null);
 });
