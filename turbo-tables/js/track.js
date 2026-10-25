@@ -58,6 +58,14 @@ export class Track {
       const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
       return { pos: p, tangent, right, t };
     });
+    // Rebase the lap and grid onto the calmest sustained section of each circuit.
+    let start=0,best=-Infinity;
+    for(let i=0;i<this.samples.length;i++){
+      const forward=this.samples[(i-8+this.samples.length)%this.samples.length].tangent;let score=1;
+      for(let offset=-16;offset<=40;offset+=4)score=Math.min(score,forward.dot(this.samples[(i+offset+this.samples.length)%this.samples.length].tangent));
+      if(score>best){best=score;start=i;}
+    }
+    this.samples=this.samples.slice(start).concat(this.samples.slice(0,start));
     this.group = new THREE.Group();
     this.bridgeIndex = def.id === 'meadow' ? Math.round(this.N * 0.24) : null;
     this.textures = this.makeTextures();

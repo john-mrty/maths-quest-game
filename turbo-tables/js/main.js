@@ -162,7 +162,7 @@ function buildSetup() {
   $('levelBlurb').textContent = `${level.name} · ${level.blurb}`;
   const on = opsFor(level);
   $('ops').innerHTML = level.ops.map((op) => `<button class="chip ${on.includes(op) ? 'on' : ''}" data-op="${op}" aria-pressed="${on.includes(op)}">${OP_SYMBOL[op]}<small>${OP_SHORT[op]}</small></button>`).join('');
-  $('racers').innerHTML = PICKABLE.map((c) => `<button class="racer ${c.id === setup.charId ? 'on' : ''}" data-char="${c.id}" aria-pressed="${c.id === setup.charId}">${portraits[c.id] ? `<img src="${portraits[c.id]}" alt="">` : ''}<b>${c.name}</b><small>${c.species}</small></button>`).join('');
+  $('racers').innerHTML = PICKABLE.map((c) => `<button class="racer ${c.id === setup.charId ? 'on' : ''}" data-char="${c.id}" aria-pressed="${c.id === setup.charId}">${portraits[c.id] ? `<img src="${portraits[c.id]}" alt="">` : ''}<b>${c.name}</b><small>${c.avatar ? (c.gender === 'male' ? 'Boy racer' : 'Girl racer') : c.species}</small></button>`).join('');
   renderTilt(); renderEasy();
   $('tracks').innerHTML = TRACKS.map((t) => `<button class="track ${t.id === setup.trackId ? 'on' : ''}" data-track="${t.id}" aria-pressed="${t.id === setup.trackId}"><img class="pic" src="../assets/turbo-track-${t.id}.jpg" alt="" width="640" height="360"><b>${t.name}</b></button>`).join('');
 }
@@ -203,7 +203,7 @@ function startRace() {
   game.setQuality(touchDevice?'medium':'high');
   // Let the loading card paint before the heavy texture generation starts
   setTimeout(() => {
-    game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: false, gateMode: 'stop', easy: setup.easy });
+    game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: setup.easy });
     document.body.classList.toggle('easy', setup.easy);
     show('hud'); game.resize();
   }, 60);
@@ -227,7 +227,7 @@ function showResults(r) {
 // ---------- Easy driving ----------
 function renderEasy() {
   const b = $('btnEasy'); b.textContent = `Driving help: ${setup.easy ? 'On' : 'Off'}`; b.classList.toggle('on', setup.easy); b.setAttribute('aria-pressed', String(setup.easy));
-  $('easyMsg').textContent = setup.easy ? 'We handle the accelerator and give gentle steering help. You steer around the bends!' : 'You control the accelerator and steering.';
+  $('easyMsg').textContent = setup.easy ? 'Auto acceleration with gentle steering help. Steer around the bends; brake to slow down.' : 'Auto acceleration is on. You steer; hold brake to slow down.';
 }
 $('btnEasy').addEventListener('click', () => { sound.click(); setup.easy = !setup.easy; saveSetup(); renderEasy(); });
 

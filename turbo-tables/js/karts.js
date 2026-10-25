@@ -21,10 +21,10 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const tube = (pts, r, seg = 24) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg, r, 10, false);
 
 export const CHARACTERS = [
-  { id: 'pip', pick: true, name: 'Pip', species: 'Fox', colour: 0xff9a52, accent: 0xfff4e6, kart: 0xff8a70, speed: 4, accel: 3, handling: 4, blurb: 'Quick and clever. Loves a shortcut.' },
-  { id: 'momo', pick: true, name: 'Momo', species: 'Panda', colour: 0xfbfbfd, accent: 0x4a4a5c, kart: 0x7fdc95, speed: 3, accel: 3, handling: 5, blurb: 'Calm, cuddly and impossible to knock off line.' },
-  { id: 'zip', pick: true, name: 'Zip', species: 'Robot', colour: 0xaad6ff, accent: 0xffd36b, kart: 0x7fb0ff, speed: 5, accel: 2, handling: 3, blurb: 'Top speed champion. Takes a moment to get going.' },
-  { id: 'luna', pick: true, name: 'Luna', species: 'Cat', colour: 0xa893ff, accent: 0xfff2fb, kart: 0xc79cff, speed: 3, accel: 5, handling: 3, blurb: 'Pounces off the line faster than anyone.' },
+  { id: 'pip', pick: true, avatar: 'short', gender:'male', skin:0xf1bb92, hair:0x8c4126, name: 'Pip', species: 'Fox', colour: 0xff9a52, accent: 0xfff4e6, kart: 0xff6b57, speed: 4, accel: 3, handling: 4, blurb: 'Quick and clever. Loves a shortcut.' },
+  { id: 'momo', pick: true, avatar:'bob', gender:'female', skin:0xe9b084, hair:0x302331, name: 'Momo', species: 'Panda', colour: 0xfbfbfd, accent: 0x4a4a5c, kart: 0x40c994, speed: 3, accel: 3, handling: 5, blurb: 'Calm, cuddly and impossible to knock off line.' },
+  { id: 'zip', pick: true, avatar:'curl', gender:'male', skin:0xa96845, hair:0x231e2b, name: 'Zip', species: 'Robot', colour: 0xaad6ff, accent: 0xffd36b, kart: 0x4b91f1, speed: 5, accel: 2, handling: 3, blurb: 'Top speed champion. Takes a moment to get going.' },
+  { id: 'luna', pick: true, avatar:'ponytail', gender:'female', skin:0xf4c6a3, hair:0x573425, name: 'Luna', species: 'Cat', colour: 0xa893ff, accent: 0xfff2fb, kart: 0xa47aee, speed: 3, accel: 5, handling: 3, blurb: 'Pounces off the line faster than anyone.' },
   { id: 'bruno', name: 'Bruno', species: 'Bear', colour: 0xc28f6a, accent: 0xf3d3ad, kart: 0xffd970, speed: 4, accel: 2, handling: 2, blurb: 'Big, heavy and hard to bump. Likes honey.' },
   { id: 'kiki', name: 'Kiki', species: 'Frog', colour: 0x8fe08d, accent: 0xfffbc8, kart: 0x7fe0d2, speed: 2, accel: 5, handling: 5, blurb: 'Tiny, bouncy and brilliant on tight bends.' },
   { id: 'dot', name: 'Dot', species: 'Ladybird', colour: 0xff8496, accent: 0xffeef1, kart: 0xff98b6, speed: 3, accel: 4, handling: 4, blurb: 'Small, speedy and always smiling.' },
@@ -143,6 +143,13 @@ export function buildKart(ch) {
   const axleG = geo('axle', () => new THREE.CylinderGeometry(0.05, 0.05, 1.9, 8).rotateZ(Math.PI / 2));
   for (const z of [1.12, -0.95]) { const a = mesh(axleG, mats.dark); a.position.set(0, z > 0 ? 0.38 : 0.46, z); body.add(a); }
 
+  // Cream racing stripes and a rear number medallion read from the chase view.
+  for(const x of [-0.13,0.13]){
+    const stripe=mesh(geo('raceStripe',()=>new RoundedBoxGeometry(0.13,0.025,0.78,2,0.015)),clay(0xfff7df));
+    stripe.position.set(x,0.81,1.23);stripe.rotation.x=-0.12;body.add(stripe);
+  }
+  const rearBadge=mesh(geo('rearBadge',()=>new THREE.CircleGeometry(0.2,24)),new THREE.MeshStandardMaterial({map:numberTexture(CHARACTERS.indexOf(ch)+1,hex),roughness:0.9}));
+  rearBadge.position.set(0,0.6,-1.45);rearBadge.rotation.y=Math.PI;body.add(rearBadge);
   // Character
   const character = buildCharacter(ch); character.scale.setScalar(0.72); character.position.set(0, 0.66, -0.36);
   character.userData.baseY = 0.66; body.add(character);
@@ -217,6 +224,34 @@ function earPair(head, main, inner, { x = 0.3, y = 0.4, z = -0.02, r = 0.17, h =
   }
 }
 
+// Friendly, simplified avatar faces with large silhouettes and small racing bodies.
+function buildAvatarHead(head,ch){
+  const skin=furMat(ch.skin),hair=furMat(ch.hair),ink=furMat(0x302236),cream=furMat(0xfffaf0),accent=paintMat(ch.kart);
+  const face=mesh(geo('avatarFace',()=>new THREE.SphereGeometry(0.5,32,24)),skin);face.scale.set(0.96,1.08,0.9);head.add(face);
+  const cap=mesh(geo('avatarHair',()=>new THREE.SphereGeometry(0.51,28,18,0,Math.PI*2,0,Math.PI*0.52)),hair);cap.position.set(0,0.08,-0.035);head.add(cap);
+  const fringe=mesh(geo('avatarFringe',()=>new THREE.SphereGeometry(0.22,20,14)),hair);fringe.scale.set(1.55,0.6,0.6);fringe.position.set(-0.08,0.34,0.33);fringe.rotation.z=-0.2;head.add(fringe);
+  for(const side of [-1,1]){
+    const ear=mesh(geo('avatarEar',()=>new THREE.SphereGeometry(0.095,14,10)),skin);ear.position.set(side*0.48,-0.03,0);ear.scale.set(0.65,1.1,0.8);head.add(ear);
+    const eye=mesh(geo('avatarEye',()=>new THREE.SphereGeometry(0.065,18,12)),ink);eye.position.set(side*0.18,0.045,0.415);eye.scale.set(0.8,1.35,0.45);head.add(eye);
+    const glint=mesh(geo('avatarGlint',()=>new THREE.SphereGeometry(0.016,10,8)),cream);glint.position.set(side*0.18+0.016,0.072,0.446);head.add(glint);
+    const brow=mesh(geo('avatarBrow',()=>new THREE.CapsuleGeometry(0.018,0.1,4,8)),hair);brow.rotation.z=Math.PI/2+side*(ch.avatar==='short'?0.15:-0.1);brow.position.set(side*0.18,0.205,0.41);head.add(brow);
+    const cheek=mesh(geo('avatarCheek',()=>new THREE.SphereGeometry(0.07,14,10)),furMat(0xee9b96));cheek.scale.set(1.25,0.5,0.2);cheek.position.set(side*0.29,-0.11,0.37);head.add(cheek);
+  }
+  const nose=mesh(geo('avatarNose',()=>new THREE.SphereGeometry(0.065,16,10)),skin);nose.position.set(0,-0.08,0.46);head.add(nose);
+  addSmile(head,-0.21,0.415,1.35);
+  if(ch.avatar==='bob'){
+    for(const side of [-1,1]){const lock=mesh(geo('bobLock',()=>new THREE.CapsuleGeometry(0.13,0.4,6,14)),hair);lock.position.set(side*0.4,-0.02,-0.08);head.add(lock);}
+    const band=mesh(geo('avatarBand',()=>new THREE.TorusGeometry(0.51,0.035,8,28,Math.PI)),accent);band.position.z=0.05;head.add(band);
+  }else if(ch.avatar==='ponytail'){
+    const pony=mesh(geo('avatarPony',()=>new THREE.SphereGeometry(0.23,20,16)),hair);pony.position.set(0,0.16,-0.53);pony.scale.set(0.9,1.5,1.1);head.add(pony);
+    const tie=mesh(geo('ponyTie',()=>new THREE.TorusGeometry(0.14,0.04,8,20)),accent);tie.position.set(0,0.23,-0.43);head.add(tie);
+  }else if(ch.avatar==='curl'){
+    for(let i=0;i<5;i++){const curl=mesh(geo('avatarCurl',()=>new THREE.SphereGeometry(0.16,16,12)),hair);curl.position.set((i-2)*0.15,0.43+Math.sin(i)*0.025,0.12);head.add(curl);}
+  }else{
+    const quiff=mesh(geo('avatarQuiff',()=>new THREE.SphereGeometry(0.19,16,12)),hair);quiff.position.set(-0.12,0.47,0.12);quiff.scale.set(1.3,0.8,1);head.add(quiff);
+  }
+}
+
 export function buildCharacter(ch) {
   const g = new THREE.Group();
   const main = furMat(ch.colour), acc = furMat(ch.accent), suit = paintMat(ch.kart), white = furMat(0xffffff), dark = furMat(0x4a4a5c);
@@ -243,8 +278,10 @@ export function buildCharacter(ch) {
   // Head
   const head = new THREE.Group(); head.position.y = 1.12; g.add(head);
   const skull = mesh(geo('skull', () => new THREE.SphereGeometry(0.5, 40, 30)), main); skull.scale.set(1.04, 0.96, 0.96); head.add(skull);
-  const sp = ch.species;
-  if (sp === 'Robot') {
+  const sp = ch.avatar ? 'Human' : ch.species;
+  if (sp === 'Human') {
+    skull.visible=false;buildAvatarHead(head,ch);
+  } else if (sp === 'Robot') {
     skull.geometry = geo('rhead', () => new RoundedBoxGeometry(0.95, 0.82, 0.82, 5, 0.22)); skull.scale.set(1, 1, 1); skull.material = paintMat(ch.colour);
     const visor = mesh(geo('visor', () => new RoundedBoxGeometry(0.74, 0.4, 0.12, 4, 0.08)), new THREE.MeshPhysicalMaterial({ color: 0x3a4170, roughness: 0.4, clearcoat: 0.5 }));
     visor.position.set(0, 0.04, 0.38); head.add(visor);
@@ -307,6 +344,7 @@ export function buildCharacter(ch) {
     const stub = mesh(geo('stub', () => new THREE.SphereGeometry(0.1, 14, 10)), sp === 'Panda' ? dark : main); stub.position.set(0, 0.15, -0.42); g.add(stub);
   }
 
+  if(ch.avatar){head.scale.setScalar(1.35);head.position.y=1.2;}
   g.userData.head = head; g.userData.body = torso;
   return g;
 }

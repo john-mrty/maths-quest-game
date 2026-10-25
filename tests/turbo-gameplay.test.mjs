@@ -79,13 +79,14 @@ test('maths stops warn before the checkpoint and hide the cue during questions o
  g.updateQuestionHud();g.quiz={};g.updateQuestionHud();g.quiz=null;g.resumeDelay=0.7;g.updateQuestionHud();g.resumeDelay=0;g.gates[0].lastAskedLap=0;g.updateQuestionHud();
  assert.deepEqual(cues,[true,false,false,false]);
 });
-test('answer recovery pauses the whole race, accepts controls and freezes its timer when paused',()=>{
- const {g}=race();g.answerQuiz(1);g.updateQuiz(1);assert.equal(g.resumeDelay,0.7);
- const previous=globalThis.requestAnimationFrame;globalThis.requestAnimationFrame=()=>{};
- let inputReads=0,simulation=0;g.readInput=()=>inputReads++;g.clock={getDelta:()=>0.1};g.scene={};g.timeScale=0;g.renderer={render(){}};g.update=dt=>simulation+=dt;g.ui.onResumeReady=()=>{};
- try {
-  g.paused=true;g.loop();assert.equal(g.resumeDelay,0.7);assert.equal(simulation,0);
-  g.paused=false;for(let i=0;i<6;i++)g.loop();assert.ok(g.resumeDelay>0);assert.equal(simulation,0);
-  for(let i=0;i<3;i++)g.loop();assert.equal(g.resumeDelay,0);assert.ok(simulation>0);assert.equal(inputReads,10);
- }finally{globalThis.requestAnimationFrame=previous;}
+test('answer feedback returns straight to driving without an extra recovery pause',()=>{
+ const {g}=race();g.answerQuiz(1);g.updateQuiz(1);assert.equal(g.quiz,null);assert.equal(g.resumeDelay,0);assert.ok(g.player.boost>0);
+});
+
+test('auto acceleration maps Down to braking and Space to item use',()=>{
+ const previous=globalThis.navigator;Object.defineProperty(globalThis,'navigator',{value:{getGamepads:()=>[]},configurable:true});
+ try{const g=Object.create(Game.prototype);g.autoGas=true;g.keys={};g.touch={};g.input={steer:0};g.readInput();assert.equal(g.input.throttle,1);
+  g.keys={ArrowDown:true,Space:true};g.readInput();assert.equal(g.input.throttle,0);assert.equal(g.input.brake,1);assert.equal(g.input.reverse,0);assert.equal(g.input.itemPressed,true);
+  g.keys={};g.readInput();assert.equal(g.input.throttle,1);assert.equal(g.input.brake,0);
+ }finally{Object.defineProperty(globalThis,'navigator',{value:previous,configurable:true});}
 });
