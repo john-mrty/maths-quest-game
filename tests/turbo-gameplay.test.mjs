@@ -73,3 +73,19 @@ test('touch pad holds acceleration beyond its edge, ignores extra fingers and cl
  for(const name of ['pointercancel','lostpointercapture','blur']){listeners.pointerdown(event(1,30,74));assert.ok(touch.padSteer>0);listeners[name](event(1,30,74));assert.equal(touch.gas,false);assert.equal(touch.padSteer,null);}
  context.tilt.on=true;listeners.pointerdown(event(1,10,74));assert.equal(touch.gas,true);assert.equal(touch.padSteer,null);
 });
+test('maths stops warn before the checkpoint and hide the cue during questions or recovery',()=>{
+ const g=Object.create(Game.prototype),cues=[];
+ g.track={samples:Array(200)};g.player={idx:10,lap:0};g.gateMode='stop';g.state='racing';g.gates=[{index:80,lastAskedLap:-1}];g.ui={onApproach:v=>cues.push(Boolean(v)),onQuestion(){}};
+ g.updateQuestionHud();g.quiz={};g.updateQuestionHud();g.quiz=null;g.resumeDelay=0.7;g.updateQuestionHud();g.resumeDelay=0;g.gates[0].lastAskedLap=0;g.updateQuestionHud();
+ assert.deepEqual(cues,[true,false,false,false]);
+});
+test('answer recovery pauses the whole race, accepts controls and freezes its timer when paused',()=>{
+ const {g}=race();g.answerQuiz(1);g.updateQuiz(1);assert.equal(g.resumeDelay,0.7);
+ const previous=globalThis.requestAnimationFrame;globalThis.requestAnimationFrame=()=>{};
+ let inputReads=0,simulation=0;g.readInput=()=>inputReads++;g.clock={getDelta:()=>0.1};g.scene={};g.timeScale=0;g.renderer={render(){}};g.update=dt=>simulation+=dt;g.ui.onResumeReady=()=>{};
+ try {
+  g.paused=true;g.loop();assert.equal(g.resumeDelay,0.7);assert.equal(simulation,0);
+  g.paused=false;for(let i=0;i<6;i++)g.loop();assert.ok(g.resumeDelay>0);assert.equal(simulation,0);
+  for(let i=0;i<3;i++)g.loop();assert.equal(g.resumeDelay,0);assert.ok(simulation>0);assert.equal(inputReads,10);
+ }finally{globalThis.requestAnimationFrame=previous;}
+});

@@ -35,7 +35,7 @@ export class Game {
     // Image based lighting for reflections on paint and chrome
     const pmrem = new THREE.PMREMGenerator(this.renderer); this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; pmrem.dispose();
     this.composer = null;
-    this.timeScale = 1; this.quiz = null; this.gateMode = 'stop';
+    this.resumeDelay = 0; this.timeScale = 1; this.quiz = null; this.gateMode = 'stop';
     this.camera = new THREE.PerspectiveCamera(65, 1, 0.5, 1500);
     this.input = { throttle: 0, brake: 0, steer: 0, drift: false, item: false, driftPressed: false, itemPressed: false };
     this.keys = {};
@@ -86,7 +86,7 @@ export class Game {
   togglePause(force) {
     if (!this.scene || !(this.state === 'racing' || this.state === 'countdown')) return;
     this.paused = force ?? !this.paused; this.ui.onPause(this.paused);
-    if (this.paused) this.sound.setEngine(0, false);
+    if (this.paused) { this.sound.setEngine(0, false); this.sound.setTyreScrub?.(0); }
   }
 
   readInput() {
@@ -121,7 +121,7 @@ export class Game {
     this.scene.fog = new THREE.FogExp2(trackDef.fog, trackDef.stars ? 0.0022 : 0.0016);
     this.autoGas = !!autoGas; this.easy = !!easy;
     this.gateMode = 'stop'; this.bonusTime = ANSWER_SECONDS;
-    this.quiz = null; this.timeScale = 1; this.ui.onQuizClose?.();
+    this.quiz = null; this.resumeDelay = 0; this.timeScale = 1; this.ui.onQuizClose?.();
     this.track = new Track(trackDef, this.quality); this.scene.add(this.track.group);
     this.buildComposer();
     this.laps = laps || trackDef.laps;
@@ -130,6 +130,7 @@ export class Game {
     this.buildSky(trackDef); this.buildLights(trackDef);
     this.buildGates(); this.buildItemBoxes(); this.buildBoostPads();
     this.buildParticles();
+    this.buildTyreTrails();
     this.camera.clear(); this.scene.add(this.camera);
     const streaks = [], streakCount = this.quality === 'high' ? 24 : 12;
     for (let i = 0; i < streakCount; i++) {
@@ -161,7 +162,8 @@ export class Game {
     }
     if (this.composer) { this.composer.dispose?.(); this.composer = null; }
     if (this.quiz) { this.quiz = null; this.ui.onQuizClose?.(); }
-    this.timeScale = 1;
+    this.timeScale = 1; this.resumeDelay = 0; this.ui.onResumeReady?.(false); this.ui.onApproach?.(false);
+    this.sound.setTyreScrub?.(0);
     this.sound.stopMusic(); this.sound.stopEngine && this.sound.setEngine(0, false);
   }
 
@@ -198,11 +200,43 @@ export class Game {
 
   // ---------- Maths gates ----------
   buildGates() {
-    // Invisible checkpoints schedule questions; answers no longer depend on a lane.
+    // Roadside pairs announce maths stops without placing answer gates across the road.
     this.gates = this.track.gateIndices.map(index => ({ index, q: this.bank.next(), lastAskedLap: -1 }));
+    const material = new THREE.MeshStandardMaterial({color:0xb99af3,roughness:0.85});
+    for (const gate of this.gates) {
+      const sample = this.track.sampleAt(gate.index - 34);
+      for (const side of [-1,1]) {
+        const marker = new THREE.Mesh(new THREE.TorusGeometry(0.65,0.13,8,20),material);
+        marker.position.copy(sample.pos).addScaledVector(sample.right,side*(ROAD_HALF+1.2));
+        marker.position.y += 1.5; marker.rotation.y = Math.atan2(sample.tangent.x,sample.tangent.z);
+        this.scene.add(marker);
+      }
+    }
   }
   refreshGate(gate) {
     gate.q = this.bank.next();
+  }
+
+  buildTyreTrails() {
+    this.tyreTrails = []; this.trailCursor = 0; this.trailTimer = 0;
+    const geometry = new THREE.PlaneGeometry(0.13, 0.65);
+    for (let i=0;i<64;i++) {
+      const mesh = new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:0x393443,transparent:true,opacity:0,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}));
+      mesh.rotation.x=-Math.PI/2;mesh.visible=false;this.scene.add(mesh);this.tyreTrails.push({mesh,life:0});
+    }
+  }
+  updateTyreTrails(dt) {
+    for(const trail of this.tyreTrails || []) {trail.life=Math.max(0,trail.life-dt);trail.mesh.visible=trail.life>0;trail.mesh.material.opacity=trail.life*0.22;}
+  }
+  leaveTyreTrails(r,dt) {
+    this.trailTimer=(this.trailTimer || 0)-dt;
+    if(!this.tyreTrails || this.trailTimer>0 || r.offroad || r.spin>0 || Math.abs(r.cornerSlide || 0)<0.35)return;
+    this.trailTimer=0.06;
+    for(const side of [-1,1]) {
+      const trail=this.tyreTrails[this.trailCursor++ % this.tyreTrails.length];trail.life=1;
+      trail.mesh.position.copy(r.pos).add(new THREE.Vector3(-Math.cos(r.heading)*side*0.8,0.035,Math.sin(r.heading)*side*0.8));
+      trail.mesh.rotation.set(-Math.PI/2,0,-r.heading);trail.mesh.visible=true;
+    }
   }
 
   // ---------- Items ----------
@@ -305,7 +339,11 @@ export class Game {
     this.readInput();
     if (!this.paused) {
       // A maths stop eases the whole race into a freeze, then eases back out after the answer
-      const target = this.quiz ? 0 : 1;
+      if (this.resumeDelay > 0) {
+        this.resumeDelay = Math.max(0, this.resumeDelay - dt);
+        this.ui.onResumeReady?.(this.resumeDelay > 0);
+      }
+      const target = this.quiz || this.resumeDelay > 0 ? 0 : 1;
       this.timeScale += (target - this.timeScale) * (1 - Math.exp(-(target ? 5 : 9) * dt));
       if (!target && this.timeScale < 0.02) this.timeScale = 0;
       if (target && this.timeScale > 0.98) this.timeScale = 1;
@@ -318,6 +356,7 @@ export class Game {
 
   update(dt) {
     this.track.update(dt, this.time);
+    this.updateTyreTrails(dt);
     if (this.state === 'countdown') {
       this.countdown -= dt;
       const c = Math.ceil(this.countdown - 0.2);
@@ -347,6 +386,7 @@ export class Game {
     this.updateCamera(dt);
     this.fadeNearCamera();
     this.sun.position.copy(this.player.pos).add(this.sunOffset); this.sun.target.position.copy(this.player.pos); this.sky.position.copy(this.camera.position);
+    this.sound.setTyreScrub?.(!this.quiz && !this.resumeDelay && !this.player.offroad ? Math.abs(this.player.cornerSlide || 0) : 0);
     this.sound.setEngine(clamp(Math.abs(this.player.speed) / 40, 0, 1), !this.quiz);
     this.ui.onHud(this.hudState());
     this.updateQuestionHud();
@@ -448,6 +488,7 @@ export class Game {
     if (r.offroad && Math.abs(r.speed) > 4 && Math.random() < 0.6) { const p = r.pos.clone().addScaledVector(fwd, -0.8); p.y += 0.2; this.emit(p, new THREE.Vector3((Math.random() - 0.5) * 4, 2, (Math.random() - 0.5) * 4), this.track.def.ground, 0.5); }
     if (r.boost > 0 && Math.random() < 0.8) { const p = r.pos.clone().addScaledVector(fwd, -2.1); p.y += 0.5; this.emit(p, new THREE.Vector3((Math.random() - 0.5) * 2, 1, (Math.random() - 0.5) * 2).addScaledVector(fwd, -8), Math.random() < 0.5 ? 0xffa02e : 0xfff176, 0.3); }
 
+    if (r.isPlayer) this.leaveTyreTrails?.(r, dt);
     // Features
     this.checkGate(r); this.checkBoostPads(r); this.checkItemPickup(r);
     if (!spinning && inp.itemPressed && r.item) this.useItem(r);
@@ -682,7 +723,7 @@ export class Game {
   updateCamera(dt) {
     const p = this.player; const fwd = new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading));
     const bend = this.track.sampleAt(p.idx).tangent.clone().cross(this.track.sampleAt(p.idx + 12).tangent).y;
-    const lag = this.reducedMotion ? 0 : (p.drift.active ? -p.drift.dir * 0.25 : 0) + clamp(bend, -0.3, 0.3) * 0.3;
+    const lag = this.reducedMotion ? 0 : -(p.cornerSlide || 0) * 0.14 + clamp(bend, -0.3, 0.3) * 0.3;
     const dirBack = new THREE.Vector3(Math.sin(p.heading + lag), 0, Math.cos(p.heading + lag));
     const dist = 8.5 + clamp(p.speed / p.stats.max, 0, 1.5) * 1.2 + (p.boost > 0 && !this.reducedMotion ? 1.0 : 0);
     const target = p.pos.clone().addScaledVector(dirBack, -dist).add(new THREE.Vector3(0, 4.0, 0));
@@ -755,14 +796,21 @@ export class Game {
         const p = this.player;
         if (z.correct) { p.slow = 0; this.applyBoost(p, z.reward.duration, z.reward.power); this.confetti(p.pos, 50, [0xffc34d, 0xffe79e, 0xfff8de]); }
         else { p.boost = 0; p.boostPower = 1; p.slow = 2.2; p.speed *= 0.65; }
-        this.quiz = null; this.keys = {}; this.ui.onQuizClose();
+        this.quiz = null; this.resumeDelay = 0.7; this.keys = {}; this.ui.onQuizClose(); this.ui.onResumeReady?.(true);
         this.ui.onFeedback({ correct: z.correct, title: z.correct ? 'TURBO!' : 'Slowed down!', text: `${z.q.text} = ${z.q.answer}` });
       }
     }
   }
 
   updateQuestionHud() {
-    if (this.gateMode === 'stop') { this.ui.onQuestion(null); return; }
+    if (this.gateMode === 'stop') {
+      const n = this.track.samples.length, p = this.player;
+      const near = this.state === 'racing' && !this.quiz && !this.resumeDelay && this.gates.some(g => {
+        const distance = (g.index - p.idx + n) % n;
+        return g.lastAskedLap !== p.lap && distance >= 34 && distance < 95;
+      });
+      this.ui.onApproach?.(near); this.ui.onQuestion(null); return;
+    }
     const p = this.player; const n = this.track.samples.length;
     let near = null, nearD = 999;
     for (const gate of this.gates) { let d = gate.index - p.idx; if (d < 0) d += n; if (d < nearD) { nearD = d; near = gate; } }

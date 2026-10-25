@@ -58,6 +58,17 @@ export class Sound {
     o.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfx); o.start(); o2.start();
     this.engine = { o, o2, g, f };
   }
+  setTyreScrub(amount) {
+    if (!this.ctx) return;
+    if (!this.scrub) {
+      const buffer=this.ctx.createBuffer(1,this.ctx.sampleRate,this.ctx.sampleRate),data=buffer.getChannelData(0);
+      for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
+      const source=this.ctx.createBufferSource(),filter=this.ctx.createBiquadFilter(),gain=this.ctx.createGain();
+      source.buffer=buffer;source.loop=true;filter.type='bandpass';filter.frequency.value=950;filter.Q.value=0.6;gain.gain.value=0;
+      source.connect(filter);filter.connect(gain);gain.connect(this.sfx);source.start();this.scrub={gain};
+    }
+    this.scrub.gain.gain.setTargetAtTime(Math.max(0,amount-0.25)*0.075,this.ctx.currentTime,0.12);
+  }
   setEngine(speedRatio, on = true) {
     if (!this.engine) return;
     const t = this.ctx.currentTime;

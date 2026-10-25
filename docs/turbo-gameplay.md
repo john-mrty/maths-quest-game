@@ -27,3 +27,9 @@ From 2nd class, opponents have higher answer accuracy and pace, brake less on cu
 Drifting now comes from speed and steering rather than holding a button. The car slides progressively into bends and restores grip when steering straightens. Removed the drift button, hop trigger, manual drift charge and mini-turbo release. Keyboard steering/acceleration and gamepad steering/acceleration remain unchanged.
 
 Touch devices get a circular left thumb pad. Holding anywhere on it supplies full acceleration, including its centre and bottom half; sideways movement provides analogue steering with a centre dead zone. Pointer capture keeps the press active outside the circle. Lifting, cancellation, lost capture, window blur, a maths question or pause clears it. Additional fingers cannot steal the pad. Tilt steering still works, with the pad serving as a forgiving accelerator. Item and reverse remain on the right. The pad is hidden without touch capability.
+
+## Race flow and visual polish
+
+Paired lilac roadside rings and a compact “Maths boost ahead” cue announce approaching questions. After the correction/reward card, the whole race remains paused for 0.7 seconds with a small “Ready…” cue; players can reposition or hold their controls before simulation eases back in. Pausing freezes this recovery timer. The large duplicate result toast is suppressed during recovery.
+
+Drifting remains automatic. Camera follow now responds to the actual corner slide, with quiet filtered tyre scrub and a bounded pool of fading tyre marks. Reduced-motion settings continue to suppress camera roll and drift lag. The road is darker, and kart contact shadows are stronger. Empty item slots and unavailable item buttons are hidden; shield changes refresh correctly. Embedded play uses the outer pause button only. Cache version 71 includes these changes and the pending tilt/rotation cleanup.

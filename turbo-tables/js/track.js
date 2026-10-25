@@ -102,7 +102,7 @@ export class Track {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(idx); g.computeVertexNormals(); g.computeTangents?.();
-    const roadMat = new THREE.MeshStandardMaterial({ map: tx.asphalt.map, normalMap: tx.asphalt.normalMap, normalScale: new THREE.Vector2(0.35, 0.35), roughness: 0.95, metalness: 0, envMapIntensity: 0.2, side: THREE.DoubleSide });
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0xb3b1bd, map: tx.asphalt.map, normalMap: tx.asphalt.normalMap, normalScale: new THREE.Vector2(0.35, 0.35), roughness: 0.95, metalness: 0, envMapIntensity: 0.2, side: THREE.DoubleSide });
     const road = new THREE.Mesh(g, roadMat); road.receiveShadow = true; this.group.add(road);
 
     // Kerbs with a striped texture

@@ -55,17 +55,21 @@ const ui = {
     const p = racers.find((r) => r.isPlayer); const [px, py] = this.mmPoint(p.pos.x, p.pos.z);
     mctx.fillStyle = '#ffd23f'; mctx.strokeStyle = '#1d2440'; mctx.lineWidth = 4; mctx.beginPath(); mctx.arc(px, py, 12, 0, 7); mctx.fill(); mctx.stroke();
   },
+  onApproach(visible) { $('approachCue').hidden = !visible; },
+  onResumeReady(visible) { $('resumeCue').hidden = !visible; if(visible) $('feedback').classList.remove('show'); },
   onHud(s) {
+    hudEls.item.hidden = !(s.item || s.shield || this.rolling);
+    $('tItem').hidden = !s.item;
     if (s.rank !== lastHud.rank) hudEls.pos.innerHTML = `${s.rank}<sup>${ORD(s.rank)}</sup>`;
     if (s.lap !== lastHud.lap || s.laps !== lastHud.laps) hudEls.lap.textContent = `LAP ${s.lap}/${s.laps}`;
     hudEls.timer.textContent = fmtTime(s.time);
     if (s.stars !== lastHud.stars) hudEls.stars.textContent = `⭐ ${s.stars}`;
     const kmh = Math.round(s.speed * 3.1); if (kmh !== lastHud.kmh) hudEls.speedo.innerHTML = `${kmh}<small> km/h</small>`;
     lastHud.kmh = kmh;
-    if (s.item !== lastHud.item && !this.rolling) { hudEls.itemIcon.textContent = s.item ? ITEMS[s.item].emoji : (s.shield ? '🫧' : ''); hudEls.itemName.textContent = s.item ? ITEMS[s.item].hint : ''; }
+    if ((s.item !== lastHud.item || s.shield !== lastHud.shield) && !this.rolling) { hudEls.itemIcon.textContent = s.item ? ITEMS[s.item].emoji : (s.shield ? '🫧' : ''); hudEls.itemName.textContent = s.item ? ITEMS[s.item].hint : ''; }
     if (s.drift.active) { hudEls.drift.classList.add('show'); hudEls.driftBar.style.width = `${Math.min(100, s.drift.charge / 2.2 * 100)}%`; hudEls.driftBar.style.background = s.drift.charge > 2.2 ? '#ff9a2e' : s.drift.charge > 1 ? '#7bdcff' : '#fff'; }
     else hudEls.drift.classList.remove('show');
-    Object.assign(lastHud, { rank: s.rank, lap: s.lap, laps: s.laps, stars: s.stars, item: s.item });
+    Object.assign(lastHud, { rank: s.rank, lap: s.lap, laps: s.laps, stars: s.stars, item: s.item, shield:s.shield });
     this.drawMinimap(s.racers);
   },
   onQuestion(q, approach, lane) {
@@ -76,6 +80,7 @@ const ui = {
     [0, 1, 2].forEach((i) => $('o' + i).classList.toggle('here', i === lane));
   },
   onFeedback({ correct, title, text }) {
+    if (game.resumeDelay > 0) return;
     const el = $('feedback'); el.className = correct ? 'good show' : 'bad show';
     el.innerHTML = `${title || (correct ? 'TURBO!' : 'OOPS!')}<small>${text}</small>`;
     clearTimeout(feedbackTimer); feedbackTimer = setTimeout(() => el.classList.remove('show'), correct ? 1600 : 2400);
@@ -86,14 +91,14 @@ const ui = {
   },
   onLap(lap, final) { const el = $('lapToast'); el.textContent = final ? 'FINAL LAP!' : `LAP ${lap}`; el.classList.add('show'); clearTimeout(lapTimer); lapTimer = setTimeout(() => el.classList.remove('show'), 1600); },
   onItemRoll(item, done) {
-    this.rolling = true; const keys = Object.keys(ITEMS); let i = 0; hudEls.item.classList.add('pop'); hudEls.itemName.textContent = '';
+    this.rolling = true; hudEls.item.hidden = false; const keys = Object.keys(ITEMS); let i = 0; hudEls.item.classList.add('pop'); hudEls.itemName.textContent = '';
     const tick = () => { hudEls.itemIcon.textContent = ITEMS[keys[i++ % keys.length]].emoji; if (i < 10) setTimeout(tick, 70 + i * 12); else { hudEls.itemIcon.textContent = ITEMS[item].emoji; hudEls.itemName.textContent = ITEMS[item].hint; hudEls.item.classList.remove('pop'); this.rolling = false; lastHud.item = item; done(); } };
     tick();
   },
   onItemUsed() { hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
   onPause(p) { if(p) releasePad(); $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
   onQuizOpen(q) {
-    releasePad();
+    releasePad(); $('approachCue').hidden = true;
     $('quizQ').textContent = `${q.text} = ?`;
     q.options.forEach((o, i) => { $('qa' + i).textContent = o; });
     document.querySelectorAll('.qopt').forEach((b) => { b.classList.remove('right', 'wrong', 'dim'); b.disabled = false; });
@@ -255,14 +260,14 @@ function enableTilt() {
     if (!tilt.listening) { window.addEventListener('deviceorientation', onTilt);
       screen.orientation?.addEventListener('change', () => { tilt.center = null; touch.tiltSteer = null; }); tilt.listening = true; }
     tilt.on = true; tilt.seen = false; tilt.center = null; renderTilt('Hold your device level, then tilt like a steering wheel.');
-    setTimeout(() => { if (tilt.on && !tilt.seen) tiltFail('Tilt is not available here, so use the arrow buttons. Some apps block the motion sensor.'); }, 1500);
+    setTimeout(() => { if (tilt.on && !tilt.seen) tiltFail('Tilt is not available here, so use the driving pad. Some apps block the motion sensor.'); }, 1500);
   };
   try {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') finish(); else tiltFail('Tilt needs motion access, so use the arrow buttons.'); }).catch(() => tiltFail('Tilt is not available here, so use the arrow buttons.'));
+      DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') finish(); else tiltFail('Tilt needs motion access, so use the driving pad.'); }).catch(() => tiltFail('Tilt is not available here, so use the driving pad.'));
     } else if (typeof DeviceOrientationEvent !== 'undefined') finish();
-    else tiltFail('This device has no tilt sensor, so use the arrow buttons.');
-  } catch (e) { tiltFail('Tilt is not available here, so use the arrow buttons.'); }
+    else tiltFail('This device has no tilt sensor, so use the driving pad.');
+  } catch (e) { tiltFail('Tilt is not available here, so use the driving pad.'); }
 }
 $('btnTilt').addEventListener('click', () => {
   sound.click(); setup.tilt = !setup.tilt; saveSetup();
@@ -274,11 +279,11 @@ document.querySelectorAll('.qopt').forEach((b) => b.addEventListener('pointerdow
 
 // ---------- Touch controls ----------
 game.setTouch(touch);
-for (const [id, key] of [['tReverse', 'reverse'], ['tItem', 'item']]) {
+for (const [id, key] of [['tGas', 'gas'], ['tReverse', 'reverse'], ['tItem', 'item']]) {
   const el = $(id);
-  const on = (e) => { e.preventDefault(); touch[key] = true; el.classList.add('active'); };
+  const on = (e) => { e.preventDefault(); touch[key] = true; el.setPointerCapture(e.pointerId); el.classList.add('active'); };
   const off = (e) => { e.preventDefault(); touch[key] = false; el.classList.remove('active'); };
-  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
 }
 
 // One thumb steers and accelerates. Pointer capture keeps gas held even
@@ -308,7 +313,7 @@ pad.addEventListener('pointermove', movePad);
 for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(name, e => { if(e.pointerId === padPointer) releasePad(); });
 window.addEventListener('blur', releasePad);
 const touchDevice=navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches;
-if(host){$('btnBack').textContent='← Back to games';}
+if(host){$('btnBack').textContent='← Back to games';$('btnPause').hidden=true;}
 window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){game.togglePause(true);sound.setMuted(true);game.dispose();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){releasePad();game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
 buildSetup();
