@@ -52,9 +52,9 @@ test('every character kart has valid wheel geometry and soft satin painted bodyw
  }
 });
 
-test('four selectable avatars include two male and two female racers with distinct head silhouettes',()=>{
- const racers=CHARACTERS.filter(c=>c.pick);assert.equal(racers.length,4);assert.equal(racers.filter(c=>c.gender==='male').length,2);assert.equal(racers.filter(c=>c.gender==='female').length,2);assert.equal(new Set(racers.map(c=>c.avatar)).size,4);
- for(const ch of racers){const k=buildKart(ch);assert.equal(k.character.userData.head.scale.x,1.35);}
+test('original selectable fox, panda, robot and cat retain larger detailed heads',()=>{
+ const racers=CHARACTERS.filter(c=>c.pick);assert.equal(racers.length,4);assert.equal(racers.filter(c=>c.gender==='male').length,2);assert.equal(racers.filter(c=>c.gender==='female').length,2);assert.deepEqual(racers.map(c=>c.species),['Fox','Panda','Robot','Cat']);assert.ok(racers.every(c=>!c.avatar));
+ for(const ch of racers){const k=buildKart(ch);assert.equal(k.character.userData.head.scale.x,1.2);}
 });
 test('intro finishes at the stationary chase camera before the start',()=>{
  for(const reducedMotion of [false,true]){

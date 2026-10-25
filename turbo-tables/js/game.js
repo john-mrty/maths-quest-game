@@ -705,6 +705,9 @@ export class Game {
       ch.rotation.x = lerp(ch.rotation.x, r.boost > 0 ? 0.14 : -0.025, 1 - Math.exp(-7 * dt));
       if (r.finished) ch.position.y += Math.max(0, Math.sin(this.time * 5)) * 0.15;
     }
+    const blinkPhase=(this.time+r.id*0.73)%4.2;
+    const blink=this.reducedMotion ? 1 : blinkPhase<0.14 ? Math.max(0.12,Math.abs(blinkPhase-0.07)/0.07) : 1;
+    for(const eye of ch.userData.head.userData.eyes || [])eye.scale.y=eye.userData.openScale*blink;
     if (ch.userData.tail) ch.userData.tail.rotation.y = 0.4 + Math.sin(this.time * 7 + r.id) * 0.35;
   }
 
