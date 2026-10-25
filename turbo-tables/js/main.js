@@ -255,14 +255,14 @@ function enableTilt() {
     if (!tilt.listening) { window.addEventListener('deviceorientation', onTilt);
       screen.orientation?.addEventListener('change', () => { tilt.center = null; touch.tiltSteer = null; }); tilt.listening = true; }
     tilt.on = true; tilt.seen = false; tilt.center = null; renderTilt('Hold your device level, then tilt like a steering wheel.');
-    setTimeout(() => { if (tilt.on && !tilt.seen) tiltFail('Tilt is not available here, so use the arrow buttons. Some apps block the motion sensor.'); }, 1500);
+    setTimeout(() => { if (tilt.on && !tilt.seen) tiltFail('Tilt is not available here, so use the driving pad. Some apps block the motion sensor.'); }, 1500);
   };
   try {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') finish(); else tiltFail('Tilt needs motion access, so use the arrow buttons.'); }).catch(() => tiltFail('Tilt is not available here, so use the arrow buttons.'));
+      DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') finish(); else tiltFail('Tilt needs motion access, so use the driving pad.'); }).catch(() => tiltFail('Tilt is not available here, so use the driving pad.'));
     } else if (typeof DeviceOrientationEvent !== 'undefined') finish();
-    else tiltFail('This device has no tilt sensor, so use the arrow buttons.');
-  } catch (e) { tiltFail('Tilt is not available here, so use the arrow buttons.'); }
+    else tiltFail('This device has no tilt sensor, so use the driving pad.');
+  } catch (e) { tiltFail('Tilt is not available here, so use the driving pad.'); }
 }
 $('btnTilt').addEventListener('click', () => {
   sound.click(); setup.tilt = !setup.tilt; saveSetup();
@@ -274,11 +274,11 @@ document.querySelectorAll('.qopt').forEach((b) => b.addEventListener('pointerdow
 
 // ---------- Touch controls ----------
 game.setTouch(touch);
-for (const [id, key] of [['tReverse', 'reverse'], ['tItem', 'item']]) {
+for (const [id, key] of [['tGas', 'gas'], ['tReverse', 'reverse'], ['tItem', 'item']]) {
   const el = $(id);
-  const on = (e) => { e.preventDefault(); touch[key] = true; el.classList.add('active'); };
+  const on = (e) => { e.preventDefault(); touch[key] = true; el.setPointerCapture(e.pointerId); el.classList.add('active'); };
   const off = (e) => { e.preventDefault(); touch[key] = false; el.classList.remove('active'); };
-  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
 }
 
 // One thumb steers and accelerates. Pointer capture keeps gas held even

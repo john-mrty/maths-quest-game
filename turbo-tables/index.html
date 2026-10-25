@@ -174,9 +174,8 @@ body.touch #touch { display: block; }
 #tReverse { right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--pad-b) + 104px); font-size: 12px; width: 66px; height: 66px; }
 body.touch #minimap { bottom: calc(var(--pad-b) + 96px); width: 100px; height: 100px; }
 body.touch #speedo { bottom: calc(var(--pad-b) + 180px); right: max(16px, env(safe-area-inset-right, 0px)); font-size: 30px; }
-body.touch #rotate { bottom: auto; top: calc(var(--hud-top) + 150px); animation: hintAway .6s 6s forwards; }
 @keyframes hintAway { to { opacity: 0; visibility: hidden; } }
-body.quizOpen #touch, body.quizOpen #rotate { display: none !important; }
+body.quizOpen #touch { display: none !important; }
 body.touch .tiny { display: none; }
 
 /* Results */
@@ -192,8 +191,6 @@ body.touch .tiny { display: none; }
 .log { display: flex; flex-wrap: wrap; gap: 6px; }
 .log span { padding: 4px 8px; border-radius: 10px; font-weight: 800; font-size: 13px; color: #fff; }
 .log .ok { background: var(--green); } .log .no { background: var(--red); }
-#rotate { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 8px); transform: translateX(-50%); background: rgba(29,36,64,.85); color: #fff; font-family: var(--body); font-weight: 800; font-size: 13px; padding: 8px 14px; border-radius: 999px; display: none; white-space: nowrap; }
-@media (orientation: portrait) and (max-width: 700px) { body.touch #rotate { display: block; } }
 /* Maths stop: the race freezes and a card asks the question */
 #quiz { position: absolute; inset: 0; pointer-events: auto; display: flex; align-items: flex-end; justify-content: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 12px); box-sizing: border-box; background: radial-gradient(ellipse at 50% 40%, transparent 35%, rgba(29,36,64,.55) 100%); animation: quizIn .25s ease-out; }
 #quiz[hidden] { display: none; }
@@ -286,11 +283,10 @@ body.touch .qopt .key { display: none; }
         <div class="bonusLabel" id="bonusLabel">Faster answers give bigger boosts</div>
       </div>
     </div>
-    <div id="rotate">Turn your device sideways for the best view</div>
     <div class="tiny"><button class="iconBtn" id="btnMute" title="Mute">🔊</button><button class="iconBtn" id="btnPause" title="Pause">⏸</button></div>
     <div id="touch">
       <div id="drivePad" aria-label="Hold to accelerate, slide left or right to steer"><span class="padArrows" aria-hidden="true">◀　 GO　 ▶</span><span id="driveKnob"></span></div>
-      <div class="tbtn" id="tReverse">Reverse</div><div class="tbtn" id="tItem">Item</div>
+      <div class="tbtn" id="tGas" role="button" aria-label="Hold to accelerate">GO</div><div class="tbtn" id="tReverse">Reverse</div><div class="tbtn" id="tItem">Item</div>
     </div>
   </div>
 
