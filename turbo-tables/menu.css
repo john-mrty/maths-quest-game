@@ -65,3 +65,18 @@ body.touch.tilt:not(.easy) #tGas{display:grid;left:max(18px,env(safe-area-inset-
 body.touch.tilt:not(.easy) #tGas{display:none}
 body.easy #tReverse{display:grid}
 #drivePad .padArrows{font-size:14px}
+
+/* Whole-screen hit areas stay active when portrait hides their decorations. */
+#tapSteering{display:none;position:absolute;inset:0;pointer-events:none;touch-action:none;user-select:none;-webkit-tap-highlight-color:transparent}
+body.touch.tapSteering #tapSteering{display:block}
+body.touch.tapSteering #drivePad{display:none}
+.tapZone{position:absolute;top:0;bottom:0;width:50%;pointer-events:auto;touch-action:none}
+.tapLeft{left:0}.tapRight{right:0}
+.tapZone span{position:absolute;top:48%;font-size:56px;color:#fff;opacity:.07;pointer-events:none}
+.tapLeft span{left:7%}.tapRight span{right:7%}
+body.tapGuideVisible .tapZone span{opacity:.45}
+#tapGuide{position:absolute;left:50%;top:28%;transform:translateX(-50%);width:min(340px,76vw);padding:14px 18px;text-align:center;background:#fffaf0ed;color:#39265b;border:2px solid white;border-radius:20px;box-shadow:0 3px 14px #281d3a22;pointer-events:none}
+#tapGuide strong,#tapGuide span{display:block}#tapGuide strong{font-size:18px}#tapGuide span{margin-top:5px;font-size:13px;line-height:1.4}
+#touch .tbtn{z-index:2}#hud{isolation:isolate}.tiny{z-index:3}
+body:has(#pause:not([hidden])) #tapSteering,body:has(#results:not([hidden])) #tapSteering{display:none}
+@media(orientation:portrait){.tapZone span,body.tapGuideVisible .tapZone span{opacity:0}}

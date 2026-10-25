@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createTapSteering } from './tap-steering.js';
 import { Game } from './game.js';
 import { Sound } from './audio.js';
 import { TRACKS } from './track.js';
@@ -12,16 +13,17 @@ const ORD = (n) => n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
 const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(2).padStart(5, '0')}`; };
 
 // ---------- Setup state (remembered per device) ----------
-const setup = { name: '', levelId: 3, charId: 'pip', trackId: 'meadow', tilt: false, easy: false, opsByLevel: {} };
+const setup = { name: '', levelId: 3, charId: 'pip', trackId: 'meadow', tilt: false, tap: false, easy: false, opsByLevel: {} };
 try { Object.assign(setup, host?host.setup:JSON.parse(localStorage.getItem('turbo-tables-setup') || '{}')); } catch (e) { /* ignore */ }
 if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.classLevel)||1));if(!Object.hasOwn(host.setup||{},'easy'))setup.easy=setup.levelId<=2;}
+if(setup.tilt)setup.tap=false;
 const saveSetup = () => { if(host){notify('setup',setup);return;}try { localStorage.setItem('turbo-tables-setup', JSON.stringify(setup)); } catch (e) { /* ignore */ } };
 
 const sound = new Sound();
 if(host)sound.setMuted(host.sound===false);
 $('btnMute').textContent=sound.muted?'🔇':'🔊';
 const touch = { left: false, right: false, gas: false, reverse: false, drift: false, item: false, tiltSteer: null, padSteer: null };
-if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+if (navigator.maxTouchPoints > 0 || matchMedia('(any-pointer:coarse)').matches) document.body.classList.add('touch');
 
 // ---------- HUD / UI bridge ----------
 const hudEls = { pos: $('pos'), lap: $('lap'), timer: $('timer'), stars: $('stars'), itemIcon: $('itemIcon'), itemName: $('itemName'), item: $('item'), speedo: $('speedo'), drift: $('drift'), driftBar: $('drift').firstElementChild };
@@ -86,6 +88,7 @@ const ui = {
     clearTimeout(feedbackTimer); feedbackTimer = setTimeout(() => el.classList.remove('show'), correct ? 1600 : 2400);
   },
   onCountdown(n) {
+    if(n===0){clearTimeout(tapGuideTimer);tapGuideTimer=setTimeout(hideTapGuide,1200);}
     const el = $('count'); el.textContent = n === 0 ? 'GO!' : String(n); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(countTimer); countTimer = setTimeout(() => el.classList.remove('show'), n === 0 ? 900 : 700);
   },
@@ -96,9 +99,9 @@ const ui = {
     tick();
   },
   onItemUsed() { hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
-  onPause(p) { if(p) releasePad(); $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
+  onPause(p) { if(p){releasePad();tapSteering.reset();hideTapGuide();} $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
   onQuizOpen(q) {
-    releasePad(); $('approachCue').hidden = true;
+    releasePad();tapSteering.reset();hideTapGuide(); $('approachCue').hidden = true;
     $('quizQ').textContent = `${q.text} = ?`;
     q.options.forEach((o, i) => { $('qa' + i).textContent = o; });
     document.querySelectorAll('.qopt').forEach((b) => { b.classList.remove('right', 'wrong', 'dim'); b.disabled = false; });
@@ -123,12 +126,12 @@ const ui = {
     $('bonusLabel').textContent = correct ? `${reward.duration.toFixed(1)} second boost coming up!` : 'A short slowdown, then keep racing. You can get the next one!';
   },
   onQuizClose() { $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
-  onFinish(results) { showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:setup.easy}); },
+  onFinish(results) { tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:setup.easy}); },
 };
 
 // ---------- Screens ----------
 const screens = ['connecting', 'setup', 'hud', 'pause', 'results', 'loading'];
-function show(...ids) { for (const s of screens) $(s).hidden = !ids.includes(s); }
+function show(...ids) { if(!ids.includes('hud')){tapSteering.reset();hideTapGuide();} for (const s of screens) $(s).hidden = !ids.includes(s); }
 
 const game = new Game({ canvas: $('gl'), sound, ui });
 window.__game = game;
@@ -163,7 +166,7 @@ function buildSetup() {
   const on = opsFor(level);
   $('ops').innerHTML = level.ops.map((op) => `<button class="chip ${on.includes(op) ? 'on' : ''}" data-op="${op}" aria-pressed="${on.includes(op)}">${OP_SYMBOL[op]}<small>${OP_SHORT[op]}</small></button>`).join('');
   $('racers').innerHTML = PICKABLE.map((c) => `<button class="racer ${c.id === setup.charId ? 'on' : ''}" data-char="${c.id}" aria-pressed="${c.id === setup.charId}">${portraits[c.id] ? `<img src="${portraits[c.id]}" alt="">` : ''}<b>${c.name}</b><small>${c.species}</small></button>`).join('');
-  renderTilt(); renderEasy();
+  renderTilt(); renderEasy(); renderTap();
   $('tracks').innerHTML = TRACKS.map((t) => `<button class="track ${t.id === setup.trackId ? 'on' : ''}" data-track="${t.id}" aria-pressed="${t.id === setup.trackId}"><img class="pic" src="../assets/turbo-track-${t.id}.jpg" alt="" width="640" height="360"><b>${t.name}</b></button>`).join('');
 }
 $('levels').addEventListener('click', (e) => { const b = e.target.closest('[data-level]'); if (!b) return; setup.levelId = +b.dataset.level; sound.click(); buildSetup(); });
@@ -205,7 +208,7 @@ function startRace() {
   setTimeout(() => {
     game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: setup.easy });
     document.body.classList.toggle('easy', setup.easy);
-    show('hud'); game.resize();
+    show('hud'); game.resize(); showTapGuide();
   }, 60);
 }
 
@@ -248,6 +251,10 @@ function onTilt(e) {
   const d = v - tilt.center; const dz = Math.abs(d) < 3 ? 0 : d - Math.sign(d) * 3;
   touch.tiltSteer = Math.max(-1, Math.min(1, -dz / 18));
 }
+function renderTap(){
+  const b=$('btnTap');b.textContent=`Tap to steer: ${setup.tap?'On':'Off'}`;b.classList.toggle('on',setup.tap);b.setAttribute('aria-pressed',String(setup.tap));
+  document.body.classList.toggle('tapSteering',setup.tap && touchDevice);
+}
 function renderTilt(msg) {
   const b = $('btnTilt'); b.textContent = `Tilt to steer: ${setup.tilt ? 'On' : 'Off'}`; b.classList.toggle('on', setup.tilt); b.setAttribute('aria-pressed', String(setup.tilt));
   document.body.classList.toggle('tilt', tilt.on);
@@ -257,6 +264,7 @@ function tiltFail(msg) { tilt.on = false; setup.tilt = false; touch.tiltSteer = 
 // Must be called straight from a tap: iPhones only ask for motion access inside a tap
 function enableTilt() {
   const finish = () => {
+    if(!setup.tilt)return;
     if (!tilt.listening) { window.addEventListener('deviceorientation', onTilt);
       screen.orientation?.addEventListener('change', () => { tilt.center = null; touch.tiltSteer = null; }); tilt.listening = true; }
     tilt.on = true; tilt.seen = false; tilt.center = null; renderTilt('Hold your device level, then tilt like a steering wheel.');
@@ -270,8 +278,14 @@ function enableTilt() {
   } catch (e) { tiltFail('Tilt is not available here, so use the driving pad.'); }
 }
 $('btnTilt').addEventListener('click', () => {
-  sound.click(); setup.tilt = !setup.tilt; saveSetup();
+  sound.click(); setup.tilt = !setup.tilt; if(setup.tilt){setup.tap=false;tapSteering.reset();renderTap();}saveSetup();
   if (setup.tilt) enableTilt(); else { tilt.on = false; touch.tiltSteer = null; renderTilt(''); }
+});
+
+$('btnTap').addEventListener('click',()=>{
+  sound.click();setup.tap=!setup.tap;releasePad();tapSteering.reset();hideTapGuide();
+  if(setup.tap){setup.tilt=false;tilt.on=false;touch.tiltSteer=null;renderTilt('');}
+  renderTap();saveSetup();
 });
 
 // ---------- Maths stop answers (mouse and touch) ----------
@@ -312,9 +326,18 @@ pad.addEventListener('pointerdown', e => {
 pad.addEventListener('pointermove', movePad);
 for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(name, e => { if(e.pointerId === padPointer) releasePad(); });
 window.addEventListener('blur', releasePad);
-const touchDevice=navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches;
+const touchDevice=navigator.maxTouchPoints>0||matchMedia('(any-pointer:coarse)').matches;
+const tapSteering=createTapSteering($('tapSteering'),{
+  enabled:()=>setup.tap && !setup.tilt && !game.paused && !game.quiz && ['countdown','racing'].includes(game.state) && !$('hud').hidden && $('results').hidden,
+  setSteer:value=>{touch.padSteer=value;}
+});
+let tapGuideTimer=null;
+function hideTapGuide(){clearTimeout(tapGuideTimer);$('tapGuide').hidden=true;document.body.classList.remove('tapGuideVisible');}
+function showTapGuide(){hideTapGuide();if(!touchDevice||!setup.tap)return;$('tapGuide').hidden=false;document.body.classList.add('tapGuideVisible');tapGuideTimer=setTimeout(hideTapGuide,6500);}
+window.addEventListener('blur',()=>{tapSteering.reset();hideTapGuide();});
+window.addEventListener('resize',()=>tapSteering.reset());
 if(host){$('btnBack').textContent='← Back to games';$('btnPause').hidden=true;}
-window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){game.togglePause(true);sound.setMuted(true);game.dispose();}});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){releasePad();game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
+window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){tapSteering.reset();hideTapGuide();game.togglePause(true);sound.setMuted(true);game.dispose();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){tapSteering.reset();hideTapGuide();releasePad();game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});
 buildSetup();
 show('setup');notify('loaded');
