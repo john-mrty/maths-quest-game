@@ -41,3 +41,9 @@ The four selectable racers keep their original identities: Pip the fox, Momo the
 The camera orbit finishes in the stationary chase position before GO. The grid and lap origin are rebased onto each circuit’s gentlest sustained segment, and the automatic launch boost is removed. Auto acceleration is always on in setup, with Down/S or the touch Brake button slowing the car to a stop. Driving help adds guidance while respecting the brake. Spacebar uses an item. The touch pad now labels steering only, and tilt needs no GO button. The first answer option uses pale pink. The additional 0.7-second recovery pause after answer feedback is removed.
 
 Checks cover camera continuity, forward track direction at every grid, two male and two female original selectable racers, finite kart geometry, auto acceleration, Down braking, Spacebar items and immediate return from answer feedback. Visual appearance and physical touch/tilt feel need review on device. Cache version 73 refreshes the app.
+
+## Tap to steer
+
+Touch-only Tap to steer is saved per learner and mutually exclusive with tilt. Full left and right halves of the viewport accept steering, with explicit brake, item and pause controls taking priority. Short taps nudge for 160ms; holding continues turning and dragging across the centre switches direction. Portrait hides target decorations while retaining hit areas; landscape uses faint edge chevrons. A brief guide appears during the race start and disappears shortly after GO without pausing play.
+
+Pause, questions, leaving play, control changes, resizing, page hiding and focus loss clear tap steering. Multi-touch restores the remaining thumb on release; desktop mouse clicks are ignored. Cache version 74 includes the new controller offline. Physical device handling and visual layout remain unverified.
