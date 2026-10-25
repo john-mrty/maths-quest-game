@@ -203,7 +203,7 @@ function startRace() {
   game.setQuality(touchDevice?'medium':'high');
   // Let the loading card paint before the heavy texture generation starts
   setTimeout(() => {
-    game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: false, gateMode: 'stop', easy: setup.easy });
+    game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: setup.easy });
     document.body.classList.toggle('easy', setup.easy);
     show('hud'); game.resize();
   }, 60);
@@ -227,7 +227,7 @@ function showResults(r) {
 // ---------- Easy driving ----------
 function renderEasy() {
   const b = $('btnEasy'); b.textContent = `Driving help: ${setup.easy ? 'On' : 'Off'}`; b.classList.toggle('on', setup.easy); b.setAttribute('aria-pressed', String(setup.easy));
-  $('easyMsg').textContent = setup.easy ? 'We handle the accelerator and give gentle steering help. You steer around the bends!' : 'You control the accelerator and steering.';
+  $('easyMsg').textContent = setup.easy ? 'Auto acceleration with gentle steering help. Steer around the bends; brake to slow down.' : 'Auto acceleration is on. You steer; hold brake to slow down.';
 }
 $('btnEasy').addEventListener('click', () => { sound.click(); setup.easy = !setup.easy; saveSetup(); renderEasy(); });
 

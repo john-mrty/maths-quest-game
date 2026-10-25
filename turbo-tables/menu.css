@@ -61,3 +61,7 @@ body.touch.tilt:not(.easy) #tGas{display:grid;left:max(18px,env(safe-area-inset-
 #resumeCue{bottom:28%;font-size:22px}
 #pos{font-size:clamp(40px,6vw,64px)}
 #timer{font-size:18px;opacity:.85}
+
+body.touch.tilt:not(.easy) #tGas{display:none}
+body.easy #tReverse{display:grid}
+#drivePad .padArrows{font-size:14px}

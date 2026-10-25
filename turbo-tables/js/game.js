@@ -98,7 +98,7 @@ export class Game {
     if (steer === 0 && typeof t.tiltSteer === 'number') steer = t.tiltSteer;
     let throttle = (k.ArrowUp || k.KeyW || t.gas) ? 1 : 0, reverse = (k.ArrowDown || k.KeyS || t.reverse) ? 1 : 0;
     let drift = false;
-    let item = !!(k.KeyE || k.Enter || k.ControlLeft || k.KeyQ || t.item);
+    let item = !!(k.Space || t.item);
     if (gp) {
       if (Math.abs(gp.axes[0]) > 0.15) steer = -gp.axes[0];
       if (gp.buttons[0]?.pressed || gp.buttons[7]?.value > 0.2) throttle = Math.max(throttle, gp.buttons[7]?.value || 1);
@@ -106,11 +106,11 @@ export class Game {
       if (gp.buttons[3]?.pressed || gp.buttons[4]?.pressed) item = true;
       if (gp.buttons[14]?.pressed) steer = 1; if (gp.buttons[15]?.pressed) steer = -1;
     }
-    if (this.autoGas) throttle = Math.max(throttle, 1);
+    if (this.autoGas) throttle = reverse ? 0 : 1;
     const i = this.input;
     i.driftPressed = drift && !i.drift; i.driftReleased = !drift && i.drift;
     i.itemPressed = item && !i.item;
-    i.steer = lerp(i.steer, steer, 0.35); i.throttle = throttle; i.reverse = reverse; i.brake = 0; i.drift = drift; i.item = item;
+    i.steer = lerp(i.steer, steer, 0.35); i.throttle = throttle; i.reverse = this.autoGas ? 0 : reverse; i.brake = this.autoGas ? reverse : 0; i.drift = drift; i.item = item;
   }
 
   // ---------- Race setup ----------
@@ -119,7 +119,7 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.environment = this.envMap;
     this.scene.fog = new THREE.FogExp2(trackDef.fog, trackDef.stars ? 0.0022 : 0.0016);
-    this.autoGas = !!autoGas; this.easy = !!easy;
+    this.autoGas = autoGas !== false; this.easy = !!easy;
     this.gateMode = 'stop'; this.bonusTime = ANSWER_SECONDS;
     this.quiz = null; this.resumeDelay = 0; this.timeScale = 1; this.ui.onQuizClose?.();
     this.track = new Track(trackDef, this.quality); this.scene.add(this.track.group);
@@ -365,13 +365,12 @@ export class Game {
       this.cameraIntro(dt);
       for (const r of this.racers) this.updateVisual(r, dt);
       this.updateItemBoxes(dt); this.updateParticles(dt);
-      // Allow a rolling start: holding gas during "1" gives a small boost
-      if (this.countdown < 1.2 && (this.input.throttle > 0.5 || this.easy)) this.player.startBoost = true;
+      // Start at normal speed after the camera has settled.
+
       this.ui.onHud(this.hudState());
       return;
     }
     if (this.state === 'racing') this.raceTime += dt;
-    if (this.player.startBoost) { this.player.startBoost = false; this.applyBoost(this.player, 1.3, 1.25); }
     if (this.gateMode === 'stop' && !this.quiz && this.state === 'racing' && !this.player.finished) {
       const n = this.track.samples.length;
       for (const gate of this.gates) { let d = gate.index - this.player.idx; if (d < 0) d += n; if (d > 0 && d < 34 && gate.lastAskedLap !== this.player.lap) { this.openQuiz(gate); break; } }
@@ -412,12 +411,12 @@ export class Game {
     let max = st.max * (r.boost > 0 ? r.boostPower : 1);
     if (r.offroad && r.boost <= 0) max *= 0.8;
     if (r.slow > 0) max *= 0.7;
-    if (r.boost > 0) { r.boost -= dt; r.speed = Math.max(r.speed, Math.min(max, r.speed + 60 * dt)); }
+    if (r.boost > 0) { r.boost -= dt; if (!inp.brake) r.speed = Math.max(r.speed, Math.min(max, r.speed + 60 * dt)); }
     // Accelerate to go, let go to coast down, reverse to back up. AI can also brake for corners.
     const throttle = spinning ? 0 : inp.throttle, reverse = spinning ? 0 : (inp.reverse || 0), brake = spinning ? 0 : (inp.brake || 0);
     if (throttle > 0) r.speed += st.accel * throttle * dt * (r.speed > max ? 0 : 1);
     else if (reverse > 0) r.speed -= (r.speed > 0 ? st.accel * 1.3 : st.accel * 0.6) * dt;
-    else if (brake > 0 && r.speed > 0) r.speed -= 20 * dt;
+    else if (brake > 0) r.speed = Math.max(0, r.speed - 25 * dt);
     else { const drag = 10 * dt; r.speed = Math.abs(r.speed) <= drag ? 0 : r.speed - Math.sign(r.speed) * drag; }
     if (r.speed > max) r.speed = lerp(r.speed, max, 1 - Math.exp(-3 * dt));
     r.speed = clamp(r.speed, -st.max * 0.35, max + 1);
@@ -504,7 +503,7 @@ export class Game {
     const bend = 1 - clamp(this.track.sampleAt(r.idx).tangent.dot(this.track.sampleAt(r.idx + 20).tangent), 0, 1);
     const want = st.max * (1 - bend * 0.55);
     const boosting = r.boost > 0;
-    return { throttle: boosting || r.speed < want ? 1 : 0, brake: !boosting && r.speed > want + 3 ? 1 : 0, reverse: 0, steer: steering, drift: inp.drift, driftPressed: inp.driftPressed, itemPressed: inp.itemPressed };
+    return { throttle: inp.brake ? 0 : boosting || r.speed < want ? 1 : 0, brake: inp.brake || (!boosting && r.speed > want + 3 ? 1 : 0), reverse: 0, steer: steering, drift: inp.drift, driftPressed: inp.driftPressed, itemPressed: inp.itemPressed };
   }
 
   autoSteer(r, lane = 0) {
@@ -706,19 +705,27 @@ export class Game {
       ch.rotation.x = lerp(ch.rotation.x, r.boost > 0 ? 0.14 : -0.025, 1 - Math.exp(-7 * dt));
       if (r.finished) ch.position.y += Math.max(0, Math.sin(this.time * 5)) * 0.15;
     }
+    const blinkPhase=(this.time+r.id*0.73)%4.2;
+    const blink=this.reducedMotion ? 1 : blinkPhase<0.14 ? Math.max(0.12,Math.abs(blinkPhase-0.07)/0.07) : 1;
+    for(const eye of ch.userData.head.userData.eyes || [])eye.scale.y=eye.userData.openScale*blink;
     if (ch.userData.tail) ch.userData.tail.rotation.y = 0.4 + Math.sin(this.time * 7 + r.id) * 0.35;
   }
 
   baseFov() { const a = this.camera.aspect; return a >= 1 ? 65 : 65 + Math.min(30, (1 - a) * 55); }
 
   cameraIntro(dt) {
-    const p = this.player; const t = 1 - clamp(this.countdown / 4.2, 0, 1);
-    const a = this.reducedMotion ? p.heading + Math.PI : Math.PI * 0.9 - t * Math.PI * 0.9 + p.heading;
-    const r = 11 - t * 2.5; const h = 4.5 - t * 0.5;
-    const target = new THREE.Vector3(p.pos.x + Math.sin(a) * r, p.pos.y + h, p.pos.z + Math.cos(a) * r);
-    this.camera.position.lerp(target, 1 - Math.exp(-6 * dt));
-    this.camera.lookAt(p.pos.x, p.pos.y + 1.5, p.pos.z);
-    this.camera.fov = this.baseFov(); this.camera.updateProjectionMatrix();
+    const p = this.player;
+    // Complete the orbit early and hold the exact stationary chase view for GO.
+    const progress = clamp((4.2 - this.countdown) / 3.2, 0, 1);
+    const t = progress * progress * (3 - 2 * progress);
+    const bend = this.track.sampleAt(p.idx).tangent.clone().cross(this.track.sampleAt(p.idx + 12).tangent).y;
+    const lag = this.reducedMotion ? 0 : clamp(bend,-0.3,0.3)*0.3;
+    const a = p.heading + Math.PI + lag + (this.reducedMotion ? 0 : (1-t)*Math.PI*0.9);
+    const target = p.pos.clone().add(new THREE.Vector3(Math.sin(a)*(8.5+(1-t)*2.5),4+(1-t)*0.5,Math.cos(a)*(8.5+(1-t)*2.5)));
+    this.camera.position.copy(target);
+    const forward = new THREE.Vector3(Math.sin(p.heading),0,Math.cos(p.heading));
+    const look = p.pos.clone().addScaledVector(forward,7*t).add(new THREE.Vector3(0,1.5-0.1*t,0));
+    this.camera.lookAt(look);this.camera.fov=this.baseFov();this.camera.updateProjectionMatrix();
   }
   updateCamera(dt) {
     const p = this.player; const fwd = new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading));
@@ -796,7 +803,7 @@ export class Game {
         const p = this.player;
         if (z.correct) { p.slow = 0; this.applyBoost(p, z.reward.duration, z.reward.power); this.confetti(p.pos, 50, [0xffc34d, 0xffe79e, 0xfff8de]); }
         else { p.boost = 0; p.boostPower = 1; p.slow = 2.2; p.speed *= 0.65; }
-        this.quiz = null; this.resumeDelay = 0.7; this.keys = {}; this.ui.onQuizClose(); this.ui.onResumeReady?.(true);
+        this.quiz = null; this.resumeDelay = 0; this.keys = {}; this.ui.onQuizClose();
         this.ui.onFeedback({ correct: z.correct, title: z.correct ? 'TURBO!' : 'Slowed down!', text: `${z.q.text} = ${z.q.answer}` });
       }
     }

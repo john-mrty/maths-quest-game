@@ -51,3 +51,21 @@ test('every character kart has valid wheel geometry and soft satin painted bodyw
   const box=new THREE.Box3().setFromObject(kart.group);assert.ok(box.min.toArray().every(Number.isFinite));assert.ok(box.max.toArray().every(Number.isFinite));
  }
 });
+
+test('original selectable fox, panda, robot and cat retain larger detailed heads',()=>{
+ const racers=CHARACTERS.filter(c=>c.pick);assert.equal(racers.length,4);assert.equal(racers.filter(c=>c.gender==='male').length,2);assert.equal(racers.filter(c=>c.gender==='female').length,2);assert.deepEqual(racers.map(c=>c.species),['Fox','Panda','Robot','Cat']);assert.ok(racers.every(c=>!c.avatar));
+ for(const ch of racers){const k=buildKart(ch);assert.equal(k.character.userData.head.scale.x,1.2);}
+});
+test('intro finishes at the stationary chase camera before the start',()=>{
+ for(const reducedMotion of [false,true]){
+  const p={pos:new THREE.Vector3(10,2,30),heading:0.4,speed:0,stats:{max:30},idx:0,cornerSlide:0,visualSteer:0,drift:{active:false},boost:0,finished:false};
+  const g={player:p,camera:new THREE.PerspectiveCamera(65,1.5,0.5,1500),countdown:0.3,reducedMotion,time:0,shake:0,speedStreaks:{material:{}},track:{sampleAt:()=>({tangent:new THREE.Vector3(0,0,1)})},baseFov:()=>65};
+  Game.prototype.cameraIntro.call(g,1/60);const before=g.camera.clone();Game.prototype.updateCamera.call(g,1/60);
+  assert.ok(before.position.distanceTo(g.camera.position)<1e-8);assert.ok(before.quaternion.angleTo(g.camera.quaternion)<1e-6);
+ }
+});
+test('each starting grid has a gentle run ahead before the first major bend',()=>{
+ for(const def of TRACKS){const track=new Track(def,'medium'),n=track.samples.length;const forward=track.sampleAt(n-8).tangent;
+  for(let i=-12;i<=35;i+=4)assert.ok(forward.dot(track.sampleAt(i).tangent)>0.85,def.id+' start turns too sharply');
+ }
+});
