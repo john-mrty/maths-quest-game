@@ -167,7 +167,7 @@ export function buildKart(ch) {
   const bubble = mesh(geo('bubble', () => new THREE.SphereGeometry(2.2, 28, 20)), new THREE.MeshPhysicalMaterial({ color: 0x7bdcff, transparent: true, opacity: 0.35, roughness: 0.05, transmission: 0.5, clearcoat: 1, emissive: 0x3aa8ff, emissiveIntensity: 0.3, iridescence: 1 }));
   bubble.position.y = 0.9; bubble.visible = false; g.add(bubble);
   // Soft contact shadow
-  const blob = mesh(geo('blob', () => new THREE.CircleGeometry(1.5, 24)), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false }));
+  const blob = mesh(geo('blob', () => new THREE.CircleGeometry(1.5, 24)), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2; blob.position.y = 0.02; blob.scale.set(0.9, 1.35, 1); g.add(blob);
 
   g.traverse((o) => { if (o.isMesh && o !== blob && o !== bubble && !flames.children.includes(o)) { o.castShadow = true; o.receiveShadow = true; } });
