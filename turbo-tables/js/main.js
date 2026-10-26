@@ -1,3 +1,4 @@
+import { drivingChoice, itemAction } from './driving.js';
 import * as THREE from 'three';
 import { createHaptics } from './haptics.js';
 import { createTapSteering } from './tap-steering.js';
@@ -16,7 +17,7 @@ const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `$
 // ---------- Setup state (remembered per device) ----------
 const setup = { name: '', levelId: 3, charId: 'pip', trackId: 'meadow', tilt: false, tap: false, haptics: true, easy: false, opsByLevel: {} };
 try { Object.assign(setup, host?host.setup:JSON.parse(localStorage.getItem('turbo-tables-setup') || '{}')); } catch (e) { /* ignore */ }
-if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.classLevel)||1));if(!Object.hasOwn(host.setup||{},'easy'))setup.easy=setup.levelId<=2;}
+if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.classLevel)||1));}
 if(setup.tilt)setup.tap=false;
 const saveSetup = () => { if(host){notify('setup',setup);return;}try { localStorage.setItem('turbo-tables-setup', JSON.stringify(setup)); } catch (e) { /* ignore */ } };
 
@@ -34,6 +35,7 @@ let lastHud = {};
 let feedbackTimer = 0, lapTimer = 0, countTimer = 0;
 
 const ui = {
+  onRecovery(message) { const cue = $('recoveryCue'); cue.hidden = !message; if(message) cue.textContent = message; },
   onHaptic(kind, strength) { haptics.pulse(kind, strength); },
   onHapticsStop() { haptics.stop(); },
   onGraphics(restored) {
@@ -72,7 +74,7 @@ const ui = {
   onResumeReady(visible) { $('resumeCue').hidden = !visible; if(visible) $('feedback').classList.remove('show'); },
   onHud(s) {
     hudEls.item.hidden = !(s.item || s.shield || this.rolling);
-    $('tItem').hidden = !s.item;
+    renderReadyItem(s.item);
     if (s.rank !== lastHud.rank) {
       hudEls.pos.innerHTML = `${s.rank}<sup>${ORD(s.rank)}</sup>`;
       if (s.state === 'racing' && lastHud.rank && s.rank < lastHud.rank) {
@@ -88,7 +90,7 @@ const ui = {
     if (s.stars !== lastHud.stars) hudEls.stars.textContent = `⭐ ${s.stars}`;
     const kmh = Math.round(s.speed * 3.1); if (kmh !== lastHud.kmh) hudEls.speedo.innerHTML = `${kmh}<small> km/h</small>`;
     lastHud.kmh = kmh;
-    if ((s.item !== lastHud.item || s.shield !== lastHud.shield) && !this.rolling) { hudEls.itemIcon.textContent = s.item ? ITEMS[s.item].emoji : (s.shield ? '🫧' : ''); hudEls.itemName.textContent = s.item ? ITEMS[s.item].hint : ''; }
+    if ((s.item !== lastHud.item || s.shield !== lastHud.shield) && !this.rolling) { if(s.item) showItemPicture(hudEls.itemIcon, s.item); else hudEls.itemIcon.textContent = s.shield ? '🫧' : ''; hudEls.itemName.textContent = s.item ? `${itemAction(s.item)} · ${touchDevice ? 'Tap icon' : 'Space'}` : (s.shield ? 'Shield active' : ''); }
     if (s.drift.active) { hudEls.drift.classList.add('show'); hudEls.driftBar.style.width = `${Math.min(100, s.drift.charge / 2.2 * 100)}%`; hudEls.driftBar.style.background = s.drift.charge > 2.2 ? '#ff9a2e' : s.drift.charge > 1 ? '#7bdcff' : '#fff'; }
     else hudEls.drift.classList.remove('show');
     Object.assign(lastHud, { rank: s.rank, lap: s.lap, laps: s.laps, stars: s.stars, item: s.item, shield:s.shield });
@@ -117,12 +119,13 @@ const ui = {
   onLap(lap, final) { const el = $('lapToast'); el.textContent = final ? 'FINAL LAP!' : `LAP ${lap}`; el.classList.add('show'); clearTimeout(lapTimer); lapTimer = setTimeout(() => el.classList.remove('show'), 1600); },
   onItemRoll(item, done) {
     this.rolling = true; hudEls.item.hidden = false; const keys = Object.keys(ITEMS); let i = 0; hudEls.item.classList.add('pop'); hudEls.itemName.textContent = '';
-    const tick = () => { hudEls.itemIcon.textContent = ITEMS[keys[i++ % keys.length]].emoji; if (i < 10) setTimeout(tick, 70 + i * 12); else { hudEls.itemIcon.textContent = ITEMS[item].emoji; hudEls.itemName.textContent = ITEMS[item].hint; hudEls.item.classList.remove('pop'); this.rolling = false; lastHud.item = item; done(); } };
+    const tick = () => { hudEls.itemIcon.textContent = ITEMS[keys[i++ % keys.length]].emoji; if (i < 10) setTimeout(tick, 70 + i * 12); else { showItemPicture(hudEls.itemIcon, item); hudEls.itemName.textContent = `${itemAction(item)} · ${touchDevice ? 'Tap icon' : 'Space'}`; hudEls.item.classList.remove('pop'); this.rolling = false; lastHud.item = item; done(); } };
     tick();
   },
-  onItemUsed() { hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
-  onPause(p) { if(p){haptics.stop();releasePad();tapSteering.reset();hideTapGuide();} $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
+  onItemUsed() { renderReadyItem(null); hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
+  onPause(p) { if(p){this.onRecovery(null);haptics.stop();releasePad();tapSteering.reset();hideTapGuide();} $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
   onQuizOpen(q) {
+    this.onRecovery(null);
     haptics.stop();
     releasePad();tapSteering.reset();hideTapGuide(); $('approachCue').hidden = true;
     $('quizQ').textContent = `${q.text} = ?`;
@@ -149,7 +152,7 @@ const ui = {
     $('bonusLabel').textContent = correct ? `${reward.duration.toFixed(1)} second boost coming up!` : 'A short slowdown, then keep racing. You can get the next one!';
   },
   onQuizClose() { $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
-  onFinish(results) { haptics.stop();tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:setup.easy}); },
+  onFinish(results) { haptics.stop();tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:drivingChoice(setup) === 'relaxed'}); },
 };
 
 // ---------- Screens ----------
@@ -241,13 +244,13 @@ function startRace() {
   runId=crypto.randomUUID();
   progress = new Progress(`turbo-tables-progress-${(setup.name || 'racer').toLowerCase()}-${level.id}`,host?(host.progress||{facts:{},history:[]}):null,host?value=>{host.progress=value;notify('progress',value);}:null);
   lastHud = {}; ui.qKey = null; ui.mapDrawAt = 0;
-  clearTimeout(ui.positionTimer); $('positionCue').hidden = true;
+  renderReadyItem(null); clearTimeout(ui.positionTimer); $('positionCue').hidden = true;
   show('loading');
   game.setQuality(touchDevice?'medium':'high');
   // Let the loading card paint before the heavy texture generation starts
   setTimeout(() => {
-    game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: setup.easy });
-    document.body.classList.toggle('easy', setup.easy);
+    game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: drivingChoice(setup) === 'relaxed' });
+    document.body.classList.toggle('easy', drivingChoice(setup) === 'relaxed');
     show('hud'); game.resize(); showTapGuide();
   }, 60);
 }
@@ -269,10 +272,29 @@ function showResults(r) {
 
 // ---------- Easy driving ----------
 function renderEasy() {
-  const b = $('btnEasy'); b.textContent = `Driving help: ${setup.easy ? 'On' : 'Off'}`; b.classList.toggle('on', setup.easy); b.setAttribute('aria-pressed', String(setup.easy));
-  $('easyMsg').textContent = setup.easy ? 'Auto acceleration with gentle steering help. Steer around the bends; brake to slow down.' : 'Auto acceleration is on. You steer; hold brake to slow down.';
+  const junior = setup.levelId <= 3;
+  $('tReverse').hidden = junior;
+  document.querySelector('.keys').innerHTML = '<kbd>←</kbd> <kbd>→</kbd> steer · <kbd>Space</kbd> item' + (junior ? '' : ' · <kbd>↓</kbd> brake');
+  const choice = drivingChoice(setup);
+  $('easyMsg').textContent = ({relaxed:'Gentler speed, stronger steering help and forgiving opponents.',challenging:'Full speed, independent steering and faster opponents.'})[choice] + (junior ? '' : ' Hold brake to slow down.');
 }
-$('btnEasy').addEventListener('click', () => { sound.click(); setup.easy = !setup.easy; saveSetup(); renderEasy(); });
+function showItemPicture(container, id) {
+  const picture = document.createElement('img'); picture.src = `icons/${id}.svg`; picture.alt = ITEMS[id].name;
+  container.replaceChildren(picture);
+}
+let readyItem;
+function renderReadyItem(id) {
+  const button = $('tItem'); button.hidden = !id;
+  if (id === readyItem) return;
+  readyItem = id;
+  if (!id) { button.replaceChildren(); button.removeAttribute('aria-label'); return; }
+  const item = ITEMS[id], action = itemAction(id);
+  const picture = document.createElement('img'); picture.src = `icons/${id}.svg`; picture.alt = '';
+  const caption = document.createElement('span'); caption.textContent = action;
+  button.replaceChildren(picture, caption);
+  button.setAttribute('aria-label', `${action}: ${item.name}. ${item.hint}`);
+  button.title = `${item.name}: ${item.hint}`;
+}
 
 // ---------- Tilt to steer ----------
 // Uses the phone's orientation sensor. Some hosts block the sensor, so we check that readings arrive.

@@ -117,3 +117,37 @@ test('answer boost haptic starts after the question closes and AI boosts stay si
  g.applyBoost({boost:0,isPlayer:false},1,1.3);assert.equal(events.length,1);
  g.applyBoost(g.player,2,1.5);assert.equal(events.length,1);
 });
+
+test('classes 1–3 ignore manual brakes while classes 4–6 retain them',()=>{
+ const previous=globalThis.navigator;Object.defineProperty(globalThis,'navigator',{value:{getGamepads:()=>[{axes:[0],buttons:Array.from({length:16},()=>({pressed:true,value:1}))}]},configurable:true});
+ try{for(let id=1;id<=6;id++){
+  const g=Object.create(Game.prototype);Object.assign(g,{level:{id},autoGas:true,keys:{ArrowDown:true,KeyS:true},touch:{reverse:true},input:{steer:0}});
+  g.readInput();assert.equal(g.input.brake,id<=3?0:1);assert.equal(g.input.throttle,id<=3?1:0);
+ }}finally{Object.defineProperty(globalThis,'navigator',{value:previous,configurable:true});}
+});
+function recoveryRace(easy=false){
+ const g=Object.create(Game.prototype);let cue;
+ Object.assign(g,{state:'racing',easy,input:{brake:0},ui:{onRecovery:v=>cue=v},track:{samples:[{tangent:new THREE.Vector3(0,0,1),right:new THREE.Vector3(1,0,0)}],lateral:pos=>pos.x},
+ player:{idx:0,pos:new THREE.Vector3(0,0,10),heading:Math.PI,speed:20,push:new THREE.Vector3(),lateralVel:0,drift:{active:false,charge:0},spin:0}});
+ return {g,cue:()=>cue};
+}
+test('wrong-way recovery warns first, turns smoothly and never advances along the track',()=>{
+ const {g,cue}=recoveryRace();for(let i=0;i<10;i++)g.updateRecovery(.1);
+ assert.ok(cue().includes('Follow'));assert.equal(g.player.heading,Math.PI);
+ for(let i=0;i<26;i++)g.updateRecovery(.1);
+ assert.ok(Math.abs(g.player.heading)<Math.PI);assert.equal(g.player.pos.z,10);assert.equal(g.player.idx,0);
+ for(let i=0;i<60;i++)g.updateRecovery(.1);
+ assert.ok(Math.abs(g.player.heading)<.18);assert.equal(cue(),null);
+});
+test('assistance recovers earlier, ordinary corners and item spins are left alone',()=>{
+ const helped=recoveryRace(true),normal=recoveryRace();for(let i=0;i<20;i++){helped.g.updateRecovery(.1);normal.g.updateRecovery(.1);}
+ assert.ok(helped.g.recovery.turning);assert.equal(normal.g.recovery.turning,false);
+ const {g}=recoveryRace();g.player.heading=.8;for(let i=0;i<50;i++)g.updateRecovery(.1);assert.equal(g.player.heading,.8);
+ g.player.heading=Math.PI;g.player.spin=1;for(let i=0;i<50;i++)g.updateRecovery(.1);assert.equal(g.recovery.trouble,0);
+ g.player.spin=0;g.quiz={};g.updateRecovery(10);assert.equal(g.recovery.trouble,0);
+});
+test('sustained barrier scraping moves sideways towards the road without teleporting',()=>{
+ const {g}=recoveryRace(true);g.player.heading=0;g.player.pos.x=12;
+ for(let i=0;i<25;i++)g.updateRecovery(.1);
+ assert.ok(g.player.pos.x<12);assert.ok(g.player.pos.x>0);assert.equal(g.player.pos.z,10);
+});

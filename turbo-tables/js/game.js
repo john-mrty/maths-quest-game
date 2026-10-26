@@ -1,3 +1,4 @@
+import { DRIVING, drivingDefault } from './driving.js';
 import * as THREE from 'three';
 import { Track, ROAD_HALF, LANES } from './track.js';
 import { buildKart, buildItemBox, buildJelly, buildBall, CHARACTERS } from './karts.js';
@@ -132,6 +133,7 @@ export class Game {
       if (gp.buttons[3]?.pressed || gp.buttons[4]?.pressed) item = true;
       if (gp.buttons[14]?.pressed) steer = 1; if (gp.buttons[15]?.pressed) steer = -1;
     }
+    if (this.level?.id <= 3) reverse = 0;
     if (this.autoGas) throttle = reverse ? 0 : 1;
     const i = this.input;
     i.driftPressed = drift && !i.drift; i.driftReleased = !drift && i.drift;
@@ -145,7 +147,9 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.environment = this.envMap;
     this.scene.fog = new THREE.FogExp2(trackDef.fog, trackDef.stars ? 0.0022 : 0.0016);
-    this.autoGas = autoGas !== false; this.easy = !!easy;
+    this.autoGas = autoGas !== false;
+    this.driving = DRIVING[drivingDefault(level.id)];
+    this.easy = this.driving === DRIVING.relaxed;
     this.gateMode = 'stop'; this.bonusTime = ANSWER_SECONDS;
     this.quiz = null; this.resumeDelay = 0; this.timeScale = 1; this.ui.onQuizClose?.();
     this.track = new Track(trackDef, this.quality); this.scene.add(this.track.group);
@@ -188,6 +192,7 @@ export class Game {
     }
     this.releaseComposer();
     if (this.quiz) { this.quiz = null; this.ui.onQuizClose?.(); }
+    this.recovery = null; this.ui.onRecovery?.(null);
     this.ui.onHapticsStop?.();
     this.timeScale = 1; this.resumeDelay = 0; this.ui.onResumeReady?.(false); this.ui.onApproach?.(false);
     this.sound.setTyreScrub?.(0);
@@ -316,9 +321,10 @@ export class Game {
         drift: { active: false, dir: 0, charge: 0 }, hop: 0, boost: 0, boostPower: 1, spin: 0, slow: 0, offroad: false,
         item: null, shield: false, bestLap: Infinity, lapStart: 0,
         stats: { max: 26 + ch.speed * 1.6, accel: 9 + ch.accel * 1.6, handling: 1.4 + ch.handling * 0.16, mass: 0.8 + (ch.id === 'bruno' ? 0.6 : ch.id === 'kiki' ? -0.3 : 0) },
-        ai: isPlayer ? null : { lane: (Math.random() - 0.5) * 7, laneTarget: (Math.random() - 0.5) * 7, laneTimer: 0, skill: (this.level.id >= 2 ? 0.78 + (this.level.id - 2) * 0.025 : 0.55) + Math.random() * (this.level.id >= 2 ? 0.12 : 0.35), pace: (this.level.id >= 2 ? 0.97 + (this.level.id - 2) * 0.012 : 0.86) + Math.random() * 0.1, itemTimer: 0, gateChoice: null, lastGate: -1 },
+        ai: isPlayer ? null : { lane: (Math.random() - 0.5) * 7, laneTarget: (Math.random() - 0.5) * 7, laneTimer: 0, skill: Math.min(0.99, this.driving.skill + Math.random() * 0.04), pace: this.driving.pace + Math.random() * 0.04, itemTimer: 0, gateChoice: null, lastGate: -1 },
         prevIdx: idx, wheelSpin: 0, visualTilt: 0, visualSteer: 0, push: new THREE.Vector3(), laneLock: null,
       };
+      r.stats.max *= this.driving.speed; r.stats.accel *= this.driving.speed;
       this.racers.push(r);
       if (isPlayer) this.player = r;
     });
@@ -405,6 +411,7 @@ export class Game {
     if (this.autoPilot && !this.player.ai) this.player.ai = { lane: 0, laneTarget: 0, laneTimer: 0, skill: 1, pace: 0.95, itemTimer: 0, gateChoice: null, lastGate: -1 };
     if (!this.autoPilot && this.player.ai) this.player.ai = null;
     for (const r of this.racers) { if (r.ai) this.aiControl(r, dt); this.physics(r, (r.isPlayer && !this.autoPilot) ? this.input : r.aiInput, dt); }
+    this.updateRecovery(dt);
     this.collideRacers();
     for (const r of this.racers) { this.trackProgress(r); this.updateVisual(r, dt); }
     this.rank();
@@ -418,6 +425,36 @@ export class Game {
     this.updateQuestionHud();
   }
 
+  updateRecovery(dt) {
+    const r = this.player;
+    if (this.paused || this.quiz || this.state !== 'racing' || r.finished || this.autoPilot || dt <= 0) {
+      this.ui.onRecovery?.(null); return;
+    }
+    const state = this.recovery ||= { trouble: 0, turning: false };
+    const sample = this.track.samples[r.idx];
+    const lat = this.track.lateral(r.pos, r.idx);
+    const target = Math.atan2(sample.tangent.x, sample.tangent.z);
+    const angle = wrapAngle(target - r.heading);
+    const backwards = Math.abs(angle) > Math.PI * 0.65;
+    const scraping = Math.abs(lat) > ROAD_HALF + 0.7;
+    // Item spins and deliberate braking do not count as getting stuck.
+    if (r.spin > 0 || this.input.brake) { state.trouble = 0; state.turning = false; this.ui.onRecovery?.(null); return; }
+    state.trouble = backwards || scraping ? state.trouble + dt : Math.max(0, state.trouble - dt * 2);
+    if (state.trouble >= (this.easy ? 1.8 : 3.2)) state.turning = true;
+    if (state.turning) {
+      const blend = 1 - Math.exp(-(this.easy ? 3 : 1.8) * dt);
+      r.heading += angle * blend;
+      // Move sideways towards the road without skipping any track distance or checkpoints.
+      r.pos.addScaledVector(sample.right, -lat * blend * 0.65);
+      r.lateralVel *= 1 - blend; r.push.multiplyScalar(1 - blend);
+      r.speed = Math.min(Math.max(r.speed, 6), 12); r.drift.active = false; r.drift.charge = 0;
+      this.ui.onRecovery?.('Helping you back on track');
+      if (Math.abs(angle) < 0.18 && Math.abs(lat) < ROAD_HALF - 1) { state.turning = false; state.trouble = 0; }
+    } else {
+      this.ui.onRecovery?.(state.trouble > 0.8 ? backwards ? '↑ Follow the track this way' : 'Steer towards the middle of the road' : null);
+    }
+  }
+
   hudState() {
     const p = this.player;
     return { speed: Math.abs(p.speed), lap: Math.min(p.lap + 1, this.laps), laps: this.laps, rank: p.rank, total: this.racers.length, item: p.item, time: this.raceTime, stars: this.stats.stars, boost: p.boost, drift: p.drift, state: this.state, racers: this.racers, shield: p.shield };
@@ -428,7 +465,7 @@ export class Game {
     const st = r.stats; const n = this.track.samples.length;
     if (r.finished && r.isPlayer) inp = { throttle: 0.6, steer: this.autoSteer(r), brake: 0, drift: false };
     else {
-      if (r.isPlayer && this.easy && !this.autoPilot) inp = this.easyInput(r, inp, dt);
+      if (r.isPlayer && (this.driving?.guidance > 0 || this.easy) && !this.autoPilot) inp = this.easyInput(r, inp, dt);
       if (r.isPlayer && r.laneLock !== null) inp = { ...inp, steer: this.autoSteer(r, r.laneLock), drift: false, driftPressed: false };
     }
     const spinning = r.spin > 0;
@@ -527,8 +564,9 @@ export class Game {
     const st = r.stats;
     const lat = this.track.lateral(r.pos, r.idx);
     const guidance = this.autoSteer(r, clamp(lat, -5.5, 5.5));
-    const edgeHelp = Math.abs(lat) > 6.5 ? this.autoSteer(r, 0) * 0.35 : 0;
-    const steering = clamp(inp.steer * 0.85 + guidance * 0.3 + edgeHelp, -1, 1);
+    const assistance = this.driving || DRIVING.relaxed;
+    const edgeHelp = Math.abs(lat) > 6.5 ? this.autoSteer(r, 0) * assistance.edgeHelp : 0;
+    const steering = clamp(inp.steer * assistance.steering + guidance * assistance.guidance + edgeHelp, -1, 1);
     const bend = 1 - clamp(this.track.sampleAt(r.idx).tangent.dot(this.track.sampleAt(r.idx + 20).tangent), 0, 1);
     const want = st.max * (1 - bend * 0.55);
     const boosting = r.boost > 0;
@@ -695,7 +733,7 @@ export class Game {
     const steer = clamp(wrapAngle(Math.atan2(dx, dz) - r.heading) * 3.2, -1, 1);
     // Throttle: ease off for sharp bends ahead, rubber band to the player
     const curve = 1 - clamp(this.track.sampleAt(r.idx).tangent.dot(this.track.sampleAt(r.idx + 18).tangent), 0, 1);
-    const competitive = this.level?.id >= 2;
+    const competitive = this.driving ? this.driving !== DRIVING.relaxed : this.level?.id >= 2;
     let pace = ai.pace * (1 - curve * (competitive ? 0.65 : 0.9));
     const gap = this.player.progress - r.progress; // positive: AI behind
     if (gap > 0.12) pace *= 1.15; else if (gap < -0.08) pace *= competitive ? 0.97 : 0.85;
