@@ -43,10 +43,33 @@ export class Game {
     this.clock = new THREE.Clock();
     this.time = 0;
     this.bindInput();
+    canvas.addEventListener('webglcontextlost', e => this.onContextLost(e));
+    canvas.addEventListener('webglcontextrestored', () => this.onContextRestored());
     window.addEventListener('resize', () => this.resize());
     this.resize();
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  onContextLost(event) {
+    event.preventDefault();
+    this.keys = {};
+    this.togglePause(true);
+    this.contextLost = true;
+    this.ui.onGraphics?.(false);
+  }
+  onContextRestored() {
+    this.contextLost = false;
+    this.setQuality('medium');
+    this.releaseComposer();
+    this.clock.getDelta();
+    // Keep the race paused until the player is ready.
+    this.ui.onGraphics?.(true);
+  }
+  releaseComposer() {
+    if (!this.composer) return;
+    for (const pass of this.composer.passes) pass.dispose?.();
+    this.composer.dispose(); this.composer = null;
   }
 
   resize() {
@@ -60,6 +83,9 @@ export class Game {
     this.resize();
   }
   buildComposer() {
+    this.releaseComposer();
+    // Direct rendering retains tone mapping without extra full-screen targets on phones.
+    if (this.quality !== 'high') return;
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     this.composer = new EffectComposer(this.renderer); this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -84,7 +110,7 @@ export class Game {
   }
 
   togglePause(force) {
-    if (!this.scene || !(this.state === 'racing' || this.state === 'countdown')) return;
+    if (this.contextLost || !this.scene || !(this.state === 'racing' || this.state === 'countdown')) return;
     this.paused = force ?? !this.paused; this.ui.onPause(this.paused);
     if (this.paused) { this.sound.setEngine(0, false); this.sound.setTyreScrub?.(0); }
   }
@@ -160,8 +186,9 @@ export class Game {
       });
       this.scene = null;
     }
-    if (this.composer) { this.composer.dispose?.(); this.composer = null; }
+    this.releaseComposer();
     if (this.quiz) { this.quiz = null; this.ui.onQuizClose?.(); }
+    this.ui.onHapticsStop?.();
     this.timeScale = 1; this.resumeDelay = 0; this.ui.onResumeReady?.(false); this.ui.onApproach?.(false);
     this.sound.setTyreScrub?.(0);
     this.sound.stopMusic(); this.sound.stopEngine && this.sound.setEngine(0, false);
@@ -335,7 +362,7 @@ export class Game {
     requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, this.clock.getDelta());
     this.frames = (this.frames || 0) + 1;
-    if (!this.scene) return;
+    if (!this.scene || this.contextLost || document.hidden) return;
     this.readInput();
     if (!this.paused) {
       // A maths stop eases the whole race into a freeze, then eases back out after the answer
@@ -443,6 +470,7 @@ export class Game {
     const s = this.track.samples[r.idx];
     const lat = this.track.lateral(r.pos, r.idx);
     r.offroad = Math.abs(lat) > ROAD_HALF + 0.6;
+    if (r.isPlayer && Math.abs(r.speed) > 5 && Math.abs(lat) >= ROAD_HALF - 0.25 && Math.abs(lat) <= ROAD_HALF + 1.4) this.ui.onHaptic?.('rumble');
     const wall = ROAD_HALF + 1.6;
     if (Math.abs(lat) > wall) {
       // Bounce off the barrier: reflect the velocity, steer back along the track and keep most of the speed
@@ -452,6 +480,7 @@ export class Game {
       const dir = new THREE.Vector3(Math.sin(r.heading), 0, Math.cos(r.heading));
       const v = dir.clone().multiplyScalar(r.speed); const vn = v.dot(nrm);
       if (vn > 0) {
+        if (r.isPlayer && vn > 3) this.ui.onHaptic?.('wall', vn);
         const prev = Math.abs(r.speed);
         v.addScaledVector(nrm, -1.35 * vn);
         r.push.addScaledVector(nrm, -Math.min(9, 2.5 + vn * 0.6));
@@ -512,7 +541,7 @@ export class Game {
     return clamp(wrapAngle(Math.atan2(dx, dz) - r.heading) * 3, -1, 1);
   }
 
-  applyBoost(r, time, power) { const active = r.boost > 0; r.boost = Math.max(r.boost, time); r.boostPower = active ? Math.max(power, r.boostPower) : power; if (r.isPlayer) this.sound.boost(); }
+  applyBoost(r, time, power) { const active = r.boost > 0; r.boost = Math.max(r.boost, time); r.boostPower = active ? Math.max(power, r.boostPower) : power; if (r.isPlayer) { this.sound.boost(); if (!active) this.ui.onHaptic?.('boost'); } }
   spinOut(r, strength = 1) {
     if (r.shield) { r.shield = false; if (r.isPlayer) this.sound.shield(); return; }
     r.spin = 1.2 * strength; r.speed *= 0.3; r.drift.active = false; r.boost = 0;
@@ -801,9 +830,9 @@ export class Game {
       z.resultT += dt;
       if (z.resultT > (z.correct ? 0.9 : 1.8)) {
         const p = this.player;
+        this.quiz = null; this.resumeDelay = 0; this.keys = {}; this.ui.onQuizClose();
         if (z.correct) { p.slow = 0; this.applyBoost(p, z.reward.duration, z.reward.power); this.confetti(p.pos, 50, [0xffc34d, 0xffe79e, 0xfff8de]); }
         else { p.boost = 0; p.boostPower = 1; p.slow = 2.2; p.speed *= 0.65; }
-        this.quiz = null; this.resumeDelay = 0; this.keys = {}; this.ui.onQuizClose();
         this.ui.onFeedback({ correct: z.correct, title: z.correct ? 'TURBO!' : 'Slowed down!', text: `${z.q.text} = ${z.q.answer}` });
       }
     }

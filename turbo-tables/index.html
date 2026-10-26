@@ -245,6 +245,7 @@ body.touch .qopt .key { display: none; }
       </section>
       <div class="goRow">
         <button class="chip" id="btnEasy" aria-pressed="false">Driving help: Off</button>
+        <button class="chip" id="btnHaptics" aria-pressed="true" hidden>Haptics: On</button>
         <button class="chip tiltOnly" id="btnTap" aria-pressed="false">Tap to steer: Off</button>
         <button class="chip tiltOnly" id="btnTilt" aria-pressed="false">Tilt to steer: Off</button>
         <button class="big" id="btnGo">Race!</button>
@@ -269,7 +270,8 @@ body.touch .qopt .key { display: none; }
     <div id="question"><div class="q" id="qText"></div><div class="opts"><div class="opt l0" id="o0"></div><div class="opt l1" id="o1"></div><div class="opt l2" id="o2"></div></div><div class="hint">Pick the right answer for a boost</div></div>
     <div id="approachCue" class="raceCue" role="status" hidden>Maths boost ahead</div><div id="resumeCue" class="raceCue" role="status" hidden>Ready…</div><div id="feedback"></div>
     <div id="count"></div>
-    <div id="lapToast"></div>
+    <div id="lapToast" role="status"></div>
+    <div id="positionCue" role="status" hidden></div>
     <div id="drift"><i></i></div>
     <div id="quiz" hidden>
       <div class="quizCard" id="quizCard">
@@ -298,6 +300,15 @@ body.touch .qopt .key { display: none; }
     <div class="card" style="width:min(420px,100%);text-align:center">
       <h2 style="justify-content:center">Paused</h2>
       <div class="actions" style="margin-top:14px"><button class="big alt" id="btnResume">Keep racing</button><button class="big ghost" id="btnQuit">Quit race</button></div>
+    </div>
+  </div>
+
+  <div id="graphicsRecovery" class="layer menu dim" hidden role="alert">
+    <div class="card" style="width:min(380px,100%);text-align:center">
+      <h2>Taking a pit stop</h2>
+      <p>The graphics stopped responding. Your race is paused while they recover.</p>
+      <p class="sub">If this stays on screen, reload the game. This will restart the race.</p>
+      <button class="big" id="btnReloadGraphics">Reload game</button>
     </div>
   </div>
 
