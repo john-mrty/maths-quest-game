@@ -93,3 +93,11 @@ body:has(#pause:not([hidden])) #tapSteering,body:has(#results:not([hidden])) #ta
   #positionCue{top:calc(var(--hud-top) + 55px)}
 }
 @media(prefers-reduced-motion:reduce){#lapToast{transition:none}}
+
+#recoveryCue{bottom:30%;max-width:80vw;text-align:center;font-size:13px;z-index:1}
+
+body.touch #tItem{width:88px;height:96px;border:3px solid #fff;background:linear-gradient(150deg,#fff7cc,#ffe195);box-shadow:0 4px 0 #80552e,0 0 0 4px #ffdf8b55;display:flex;flex-direction:column;gap:0;padding:3px;color:#39265b;font:900 13px var(--body)}
+#tItem img{width:60px;height:60px;pointer-events:none}#tItem span{pointer-events:none}
+#tItem.active{transform:scale(.94);box-shadow:0 1px 0 #80552e}
+
+#itemIcon img{width:54px;height:54px;vertical-align:middle}
