@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createHaptics } from './haptics.js';
 import { createTapSteering } from './tap-steering.js';
 import { Game } from './game.js';
 import { Sound } from './audio.js';
@@ -13,7 +14,7 @@ const ORD = (n) => n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
 const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(2).padStart(5, '0')}`; };
 
 // ---------- Setup state (remembered per device) ----------
-const setup = { name: '', levelId: 3, charId: 'pip', trackId: 'meadow', tilt: false, tap: false, easy: false, opsByLevel: {} };
+const setup = { name: '', levelId: 3, charId: 'pip', trackId: 'meadow', tilt: false, tap: false, haptics: true, easy: false, opsByLevel: {} };
 try { Object.assign(setup, host?host.setup:JSON.parse(localStorage.getItem('turbo-tables-setup') || '{}')); } catch (e) { /* ignore */ }
 if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.classLevel)||1));if(!Object.hasOwn(host.setup||{},'easy'))setup.easy=setup.levelId<=2;}
 if(setup.tilt)setup.tap=false;
@@ -33,6 +34,16 @@ let lastHud = {};
 let feedbackTimer = 0, lapTimer = 0, countTimer = 0;
 
 const ui = {
+  onHaptic(kind, strength) { haptics.pulse(kind, strength); },
+  onHapticsStop() { haptics.stop(); },
+  onGraphics(restored) {
+    haptics.stop();
+    releasePad(); tapSteering.reset(); hideTapGuide();
+    for (const key in touch) if (typeof touch[key] === 'boolean') touch[key] = false;
+    document.querySelectorAll('.tbtn.active').forEach(el => el.classList.remove('active'));
+    $('graphicsRecovery').hidden = restored;
+    if (restored && game.paused) $('pause').hidden = false;
+  },
   setTrack(track) {
     const pts = track.samples.map((s) => [s.pos.x, s.pos.z]);
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -62,7 +73,16 @@ const ui = {
   onHud(s) {
     hudEls.item.hidden = !(s.item || s.shield || this.rolling);
     $('tItem').hidden = !s.item;
-    if (s.rank !== lastHud.rank) hudEls.pos.innerHTML = `${s.rank}<sup>${ORD(s.rank)}</sup>`;
+    if (s.rank !== lastHud.rank) {
+      hudEls.pos.innerHTML = `${s.rank}<sup>${ORD(s.rank)}</sup>`;
+      if (s.state === 'racing' && lastHud.rank && s.rank < lastHud.rank) {
+        const cue = $('positionCue'); cue.textContent = s.rank === 1 ? 'Into the lead!' : `${s.rank}${ORD(s.rank)} place!`;
+        cue.hidden = false; clearTimeout(this.positionTimer);
+        this.positionTimer = setTimeout(() => { cue.hidden = true; }, 1800);
+        if (!game.reducedMotion) hudEls.pos.animate?.([{transform:'scale(1.18)'},{transform:'scale(1)'}],{duration:280});
+      }
+    }
+    hudEls.pos.classList.toggle('leading', s.rank === 1);
     if (s.lap !== lastHud.lap || s.laps !== lastHud.laps) hudEls.lap.textContent = `LAP ${s.lap}/${s.laps}`;
     hudEls.timer.textContent = fmtTime(s.time);
     if (s.stars !== lastHud.stars) hudEls.stars.textContent = `⭐ ${s.stars}`;
@@ -72,7 +92,9 @@ const ui = {
     if (s.drift.active) { hudEls.drift.classList.add('show'); hudEls.driftBar.style.width = `${Math.min(100, s.drift.charge / 2.2 * 100)}%`; hudEls.driftBar.style.background = s.drift.charge > 2.2 ? '#ff9a2e' : s.drift.charge > 1 ? '#7bdcff' : '#fff'; }
     else hudEls.drift.classList.remove('show');
     Object.assign(lastHud, { rank: s.rank, lap: s.lap, laps: s.laps, stars: s.stars, item: s.item, shield:s.shield });
-    this.drawMinimap(s.racers);
+    // The map only needs ten updates per second, independently of rendering speed.
+    const now = performance.now();
+    if (!this.mapDrawAt || now - this.mapDrawAt >= 100) { this.drawMinimap(s.racers); this.mapDrawAt = now; }
   },
   onQuestion(q, approach, lane) {
     const el = $('question');
@@ -99,8 +121,9 @@ const ui = {
     tick();
   },
   onItemUsed() { hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
-  onPause(p) { if(p){releasePad();tapSteering.reset();hideTapGuide();} $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
+  onPause(p) { if(p){haptics.stop();releasePad();tapSteering.reset();hideTapGuide();} $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
   onQuizOpen(q) {
+    haptics.stop();
     releasePad();tapSteering.reset();hideTapGuide(); $('approachCue').hidden = true;
     $('quizQ').textContent = `${q.text} = ?`;
     q.options.forEach((o, i) => { $('qa' + i).textContent = o; });
@@ -126,7 +149,7 @@ const ui = {
     $('bonusLabel').textContent = correct ? `${reward.duration.toFixed(1)} second boost coming up!` : 'A short slowdown, then keep racing. You can get the next one!';
   },
   onQuizClose() { $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
-  onFinish(results) { tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:setup.easy}); },
+  onFinish(results) { haptics.stop();tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:setup.easy}); },
 };
 
 // ---------- Screens ----------
@@ -135,16 +158,31 @@ function show(...ids) { if(!ids.includes('hud')){tapSteering.reset();hideTapGuid
 
 const game = new Game({ canvas: $('gl'), sound, ui });
 window.__game = game;
+const haptics = createHaptics({ enabled: () => setup.haptics,
+  active: () => touchDevice && !document.hidden && !game.paused && !game.contextLost && !game.quiz && game.state === 'racing' });
+function renderHaptics() {
+  const button = $('btnHaptics');
+  button.hidden = !haptics.supported || !touchDevice;
+  button.textContent = `Haptics: ${setup.haptics ? 'On' : 'Off'}`;
+  button.classList.toggle('on', setup.haptics);
+  button.setAttribute('aria-pressed', String(setup.haptics));
+}
+$('btnHaptics').addEventListener('click', () => {
+  setup.haptics = !setup.haptics; haptics.stop(); saveSetup(); renderHaptics();
+});
+window.addEventListener('pagehide', () => haptics.stop());
+window.addEventListener('blur', () => haptics.stop());
 let progress = null,runId=null;
 
 // Setup is three taps: class, racer, track. Everything else uses a sensible default.
 const PICKABLE = CHARACTERS.filter((c) => c.pick);
 const portraits = {};
 function makePortraits() {
+  let r;
   // Render each racer once to a picture, then free the renderer
   try {
     const canvas = document.createElement('canvas'); canvas.width = 360; canvas.height = 300;
-    const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
     const scene = new THREE.Scene(); scene.environment = game.envMap;
     scene.add(new THREE.HemisphereLight(0xeef8ff, 0xc9ecb8, 1.2)); scene.add(new THREE.AmbientLight(0xfff6ee, 0.4)); const sun = new THREE.DirectionalLight(0xfff2e0, 1.8); sun.position.set(3, 6, 5); scene.add(sun);
@@ -153,8 +191,8 @@ function makePortraits() {
       const k = buildKart(ch); k.blob.visible = false; k.group.rotation.y = 0.35; scene.add(k.group);
       r.render(scene, cam); portraits[ch.id] = canvas.toDataURL('image/png'); scene.remove(k.group);
     }
-    r.dispose(); r.forceContextLoss?.();
   } catch (e) { /* portraits are decoration: fall back to names only */ }
+  finally { r?.dispose(); r?.forceContextLoss(); }
 }
 function buildSetup() {
   if (!PICKABLE.some((c) => c.id === setup.charId)) setup.charId = PICKABLE[0].id;
@@ -166,7 +204,7 @@ function buildSetup() {
   const on = opsFor(level);
   $('ops').innerHTML = level.ops.map((op) => `<button class="chip ${on.includes(op) ? 'on' : ''}" data-op="${op}" aria-pressed="${on.includes(op)}">${OP_SYMBOL[op]}<small>${OP_SHORT[op]}</small></button>`).join('');
   $('racers').innerHTML = PICKABLE.map((c) => `<button class="racer ${c.id === setup.charId ? 'on' : ''}" data-char="${c.id}" aria-pressed="${c.id === setup.charId}">${portraits[c.id] ? `<img src="${portraits[c.id]}" alt="">` : ''}<b>${c.name}</b><small>${c.species}</small></button>`).join('');
-  renderTilt(); renderEasy(); renderTap();
+  renderTilt(); renderEasy(); renderTap(); renderHaptics();
   $('tracks').innerHTML = TRACKS.map((t) => `<button class="track ${t.id === setup.trackId ? 'on' : ''}" data-track="${t.id}" aria-pressed="${t.id === setup.trackId}"><img class="pic" src="../assets/turbo-track-${t.id}.jpg" alt="" width="640" height="360"><b>${t.name}</b></button>`).join('');
 }
 $('levels').addEventListener('click', (e) => { const b = e.target.closest('[data-level]'); if (!b) return; setup.levelId = +b.dataset.level; sound.click(); buildSetup(); });
@@ -185,6 +223,7 @@ $('tracks').addEventListener('click', (e) => { const b = e.target.closest('[data
 // ---------- Flow ----------
 $('btnBack').addEventListener('click', () => notify('exit'));
 $('btnGo').addEventListener('click', startRace);
+$('btnReloadGraphics').addEventListener('click', () => location.reload());
 $('btnAgain').addEventListener('click', startRace);
 $('btnSetup').addEventListener('click', () => { sound.click(); game.dispose(); buildSetup(); show('setup'); });
 $('btnResume').addEventListener('click', () => game.togglePause(false));
@@ -201,7 +240,8 @@ function startRace() {
   const trackDef = TRACKS.find((t) => t.id === setup.trackId);
   runId=crypto.randomUUID();
   progress = new Progress(`turbo-tables-progress-${(setup.name || 'racer').toLowerCase()}-${level.id}`,host?(host.progress||{facts:{},history:[]}):null,host?value=>{host.progress=value;notify('progress',value);}:null);
-  lastHud = {}; ui.qKey = null;
+  lastHud = {}; ui.qKey = null; ui.mapDrawAt = 0;
+  clearTimeout(ui.positionTimer); $('positionCue').hidden = true;
   show('loading');
   game.setQuality(touchDevice?'medium':'high');
   // Let the loading card paint before the heavy texture generation starts
@@ -329,7 +369,7 @@ window.addEventListener('blur', releasePad);
 const touchDevice=navigator.maxTouchPoints>0||matchMedia('(any-pointer:coarse)').matches;
 const tapSteering=createTapSteering($('tapSteering'),{
   enabled:()=>setup.tap && !setup.tilt && !game.paused && !game.quiz && ['countdown','racing'].includes(game.state) && !$('hud').hidden && $('results').hidden,
-  setSteer:value=>{touch.padSteer=value;}
+  setSteer:value=>{touch.padSteer=value;$('tapSteering').dataset.steer=value===1?'left':value===-1?'right':'';}
 });
 let tapGuideTimer=null;
 function hideTapGuide(){clearTimeout(tapGuideTimer);$('tapGuide').hidden=true;document.body.classList.remove('tapGuideVisible');}

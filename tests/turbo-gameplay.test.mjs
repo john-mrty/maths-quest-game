@@ -90,3 +90,30 @@ test('auto acceleration maps Down to braking and Space to item use',()=>{
   g.keys={};g.readInput();assert.equal(g.input.throttle,1);assert.equal(g.input.brake,0);
  }finally{Object.defineProperty(globalThis,'navigator',{value:previous,configurable:true});}
 });
+
+
+test('graphics loss freezes the race and restoration waits for explicit resume',()=>{
+ const g=Object.create(Game.prototype);let prevented=false,restored=null,clockReset=0,freed=0;
+ Object.assign(g,{scene:{},state:'racing',paused:false,keys:{ArrowLeft:true},sound:{setEngine(){},setTyreScrub(){}},
+  ui:{onPause(){},onGraphics(value){restored=value;}},clock:{getDelta(){clockReset++;}},
+  setQuality(q){this.quality=q;},composer:{passes:[{dispose(){freed++;}}],dispose(){freed++;}}});
+ g.onContextLost({preventDefault(){prevented=true;}});
+ assert.ok(prevented);assert.ok(g.paused);assert.ok(g.contextLost);assert.deepEqual(g.keys,{});assert.equal(restored,false);
+ g.togglePause(false);assert.ok(g.paused);
+ g.onContextRestored();assert.equal(g.contextLost,false);assert.equal(g.quality,'medium');assert.equal(freed,2);
+ assert.equal(clockReset,1);assert.equal(restored,true);assert.ok(g.paused);
+ g.togglePause(false);assert.equal(g.paused,false);
+});
+test('mobile rendering skips post-processing allocations and releases old passes',()=>{
+ const g=Object.create(Game.prototype);let freed=0;
+ Object.assign(g,{quality:'medium',composer:{passes:[{dispose(){freed++;}}],dispose(){freed++;}}});
+ g.buildComposer();assert.equal(g.composer,null);assert.equal(freed,2);
+ g.buildComposer();assert.equal(freed,2);
+});
+
+test('answer boost haptic starts after the question closes and AI boosts stay silent',()=>{
+ const {g}=race();const events=[];g.ui.onHaptic=(kind)=>events.push([kind,!!g.quiz]);
+ g.answerQuiz(1);g.updateQuiz(1);assert.deepEqual(events,[['boost',false]]);
+ g.applyBoost({boost:0,isPlayer:false},1,1.3);assert.equal(events.length,1);
+ g.applyBoost(g.player,2,1.5);assert.equal(events.length,1);
+});
