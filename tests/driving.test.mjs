@@ -3,16 +3,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {DRIVING,drivingDefault,drivingChoice,itemAction} from '../turbo-tables/js/driving.js';
-test('class-based driving ignores stale configuration and keeps two automatic profiles',()=>{
- assert.equal(Object.keys(DRIVING).length,2);
+test('class-based driving ignores stale configuration and sets an automatic progression by class',()=>{
+ assert.equal(Object.keys(DRIVING).length,3);
  for(let level=1;level<=6;level++){
-  assert.equal(drivingDefault(level),level<=3?'relaxed':'challenging');
+  assert.equal(drivingDefault(level),level<=2?'relaxed':level===3?'progressing':'challenging');
   assert.equal(drivingChoice({levelId:level,easy:level>3,driving:'balanced'}),drivingDefault(level));
  }
- assert.ok(DRIVING.relaxed.speed<DRIVING.challenging.speed);
- assert.ok(DRIVING.relaxed.guidance>DRIVING.challenging.guidance);
- assert.ok(DRIVING.relaxed.pace<DRIVING.challenging.pace);
- assert.ok(DRIVING.relaxed.skill<DRIVING.challenging.skill);
+ for(const field of ['speed','pace','skill']){
+  assert.ok(DRIVING.relaxed[field]<DRIVING.progressing[field]);
+  assert.ok(DRIVING.progressing[field]<DRIVING.challenging[field]);
+ }
+ assert.ok(DRIVING.relaxed.guidance>DRIVING.progressing.guidance);
+ assert.ok(DRIVING.progressing.guidance>DRIVING.challenging.guidance);
+ assert.ok(DRIVING.relaxed.edgeHelp>DRIVING.progressing.edgeHelp);
 });
 test('ready button displays the held object, action and accessible name, and clears on use',()=>{
  const source=fs.readFileSync(new URL('../turbo-tables/js/main.js',import.meta.url),'utf8');
