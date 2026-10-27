@@ -23,6 +23,15 @@ export function answerBoost(seconds) {
   return { duration: 1 + quickness * 2, power: 1.15 + quickness * 0.45 };
 }
 
+// Project the kart footprint onto the road normal, including its visible slide/spin.
+export function kartWallLimit(r, sample) {
+  const spin = r.spin > 0 ? (1.2 - r.spin) / 1.2 * Math.PI * 4 : 0;
+  const yaw = r.heading + spin + (r.drift.active ? -r.drift.dir * 0.45 : -(r.cornerSlide || 0) * 0.3);
+  const angle = yaw - Math.atan2(sample.tangent.x, sample.tangent.z);
+  const footprint = Math.abs(Math.cos(angle)) * 1.3 + Math.abs(Math.sin(angle)) * 2.4;
+  return ROAD_HALF + 1.6 - footprint - 0.25;
+}
+
 export class Game {
   constructor({ canvas, sound, ui }) {
     this.canvas = canvas; this.sound = sound; this.ui = ui;
@@ -413,6 +422,8 @@ export class Game {
     for (const r of this.racers) { if (r.ai) this.aiControl(r, dt); this.physics(r, (r.isPlayer && !this.autoPilot) ? this.input : r.aiInput, dt); }
     this.updateRecovery(dt);
     this.collideRacers();
+    // A bounce changes yaw, and kart-to-kart separation can push a car back into a wall.
+    for (const r of this.racers) this.keepKartInsideWalls(r);
     for (const r of this.racers) { this.trackProgress(r); this.updateVisual(r, dt); }
     this.rank();
     this.updateItemBoxes(dt); this.updateEntities(dt); this.updateParticles(dt);
@@ -436,7 +447,7 @@ export class Game {
     const target = Math.atan2(sample.tangent.x, sample.tangent.z);
     const angle = wrapAngle(target - r.heading);
     const backwards = Math.abs(angle) > Math.PI * 0.65;
-    const scraping = Math.abs(lat) > ROAD_HALF + 0.7;
+    const scraping = Math.abs(lat) >= kartWallLimit(r, sample) - 0.15;
     // Item spins and deliberate braking do not count as getting stuck.
     if (r.spin > 0 || this.input.brake) { state.trouble = 0; state.turning = false; this.ui.onRecovery?.(null); return; }
     state.trouble = backwards || scraping ? state.trouble + dt : Math.max(0, state.trouble - dt * 2);
@@ -508,7 +519,7 @@ export class Game {
     const lat = this.track.lateral(r.pos, r.idx);
     r.offroad = Math.abs(lat) > ROAD_HALF + 0.6;
     if (r.isPlayer && Math.abs(r.speed) > 5 && Math.abs(lat) >= ROAD_HALF - 0.25 && Math.abs(lat) <= ROAD_HALF + 1.4) this.ui.onHaptic?.('rumble');
-    const wall = ROAD_HALF + 1.6;
+    const wall = kartWallLimit(r, s);
     if (Math.abs(lat) > wall) {
       // Bounce off the barrier: reflect the velocity, steer back along the track and keep most of the speed
       const side = Math.sign(lat), over = Math.abs(lat) - wall;
@@ -598,6 +609,13 @@ export class Game {
       }
     }
     if (this.bumpCooldown) this.bumpCooldown = Math.max(0, this.bumpCooldown - 0.016);
+  }
+
+  keepKartInsideWalls(r) {
+    r.idx = this.track.nearestIndex(r.pos, r.idx);
+    const sample = this.track.samples[r.idx], lat = this.track.lateral(r.pos, r.idx);
+    const limit = kartWallLimit(r, sample);
+    if (Math.abs(lat) > limit) r.pos.addScaledVector(sample.right, Math.sign(lat) * (limit - Math.abs(lat)));
   }
 
   trackProgress(r) {
