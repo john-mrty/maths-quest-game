@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GRAPHICS } from './graphics.js';
 import * as TEX from './textures.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -75,6 +76,7 @@ export class Track {
     this.buildDecor();
     if (this.bridgeIndex !== null) this.buildMeadowLandmark();
     this.layoutFeatures();
+    this.setQuality(quality);
   }
 
   makeTextures() {
@@ -283,6 +285,7 @@ export class Track {
     }
     trunks.count = crowns.count = k; this.group.add(trunks, crowns);
     this.decorPositions = placed;
+    this.decorMeshes = [trunks, crowns];
 
     // Lake with a reflective surface
     if (d.lake) {
@@ -353,7 +356,7 @@ export class Track {
     for (let i = 0; i < 20; i++) {
       const ribbon = add(ribbonG, foamMat, 26.7, i % 7 * 2.5 - 1, (i * 3.7 % 9) - 4.5); ribbon.castShadow = false; this.waterRibbons.push(ribbon);
     }
-    const mistCount = this.quality === 'high' ? 28 : 12;
+    const mistCount = 28;
     this.mist = [];
     const mistMat = new THREE.SpriteMaterial({ map: TEX.softSprite(), color: 0xe6fff4, transparent: true, opacity: 0.3, depthWrite: false });
     for (let i = 0; i < mistCount; i++) { const sp = new THREE.Sprite(mistMat); sp.position.set(25 - i % 5, 0, (i * 2.7 % 12) - 6); sp.scale.setScalar(2 + i % 3); landmark.add(sp); this.mist.push(sp); }
@@ -362,7 +365,7 @@ export class Track {
       const arc = add(new THREE.TorusGeometry(12 + i * 0.45, 0.22, 6, 40, Math.PI), new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.52 }), 25.8, 0, 0); arc.rotation.y = Math.PI / 2; arc.castShadow = false;
     }
     // Instancing keeps a generous border of giant daisies cheap on touch devices.
-    const count = this.quality === 'high' ? 360 : 180, rng = mulberry(86);
+    const count = 360, rng = mulberry(86);
     const flowerG = mergeGeometries(Array.from({ length: 5 }, (_, i) => new THREE.SphereGeometry(0.36, 6, 4).scale(1, 0.35, 0.6).translate(Math.cos(i * Math.PI * 0.4) * 0.38, 0, Math.sin(i * Math.PI * 0.4) * 0.38)));
     const petals = new THREE.InstancedMesh(flowerG, clay(0xffffff), count);
     const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.06, 1, 5), clay(0x5eaa81), count);
@@ -375,6 +378,18 @@ export class Track {
       p.y += 0.5 * size; matrix.compose(p, quat, scale); petals.setMatrixAt(i, matrix); centres.setMatrixAt(i, matrix); petals.setColorAt(i, new THREE.Color([0xfff8e7, 0xffb8cc, 0xc3b8f3][i % 3]));
     }
     this.group.add(petals, stems, centres);
+    this.flowerMeshes = [petals, stems, centres];
+  }
+
+  setQuality(quality) {
+    this.quality = quality;
+    const ratio = GRAPHICS[quality].decor;
+    for (const mesh of [...(this.decorMeshes || []), ...(this.flowerMeshes || [])]) {
+      mesh.userData.fullCount ??= mesh.count;
+      mesh.count = Math.ceil(mesh.userData.fullCount * ratio);
+    }
+    for (const [i, cloud] of this.clouds.entries()) cloud.visible = i < Math.ceil(this.clouds.length * ratio);
+    for (const [i, mist] of (this.mist || []).entries()) mist.visible = i < (quality === 'low' ? 4 : quality === 'medium' ? 12 : 28);
   }
 
   lakeCentre() {
@@ -397,7 +412,7 @@ export class Track {
   }
 
   update(dt, time) {
-    if (this.waterfall) { const p = this.waterfall.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getY(i) * 1.8 + p.getX(i) * 2 + time * 6) * 0.13); p.needsUpdate = true; }
+    if (this.waterfall && this.quality !== 'low') { const p = this.waterfall.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getY(i) * 1.8 + p.getX(i) * 2 + time * 6) * 0.13); p.needsUpdate = true; }
     for (const [i, ribbon] of (this.waterRibbons || []).entries()) ribbon.position.y = 16 - ((time * 12 + i * 2.7) % 18);
     for (const [i, sp] of (this.mist || []).entries()) { sp.position.y = -1 + ((time * 0.7 + i * 0.37) % 4); sp.material.rotation = Math.sin(time * 0.3) * 0.1; }
     for (const c of this.clouds) { c.position.x += c.userData.speed * dt; if (c.position.x > 560) c.position.x = -560; }

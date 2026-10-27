@@ -246,7 +246,6 @@ function startRace() {
   lastHud = {}; ui.qKey = null; ui.mapDrawAt = 0;
   renderReadyItem(null); clearTimeout(ui.positionTimer); $('positionCue').hidden = true;
   show('loading');
-  game.setQuality(touchDevice?'medium':'high');
   // Let the loading card paint before the heavy texture generation starts
   setTimeout(() => {
     game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: drivingChoice(setup) === 'relaxed' });

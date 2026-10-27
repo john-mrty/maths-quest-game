@@ -17,7 +17,7 @@ globalThis.document={createElement:()=>{
 }};
 
 test('meadow landmark builds finite geometry at both quality levels and keeps the racing surface aligned',()=>{
- for(const quality of ['medium','high']){
+ for(const quality of ['low','medium','high']){
   const track=new Track(TRACKS[0],quality);
   assert.ok(track.bridgeIndex>0);assert.ok(track.mist.length>0);
   for(const t of [0,0.5,15,120])track.update(1/60,t);
@@ -69,3 +69,28 @@ test('each starting grid has a gentle run ahead before the first major bend',()=
   for(let i=-12;i<=35;i+=4)assert.ok(forward.dot(track.sampleAt(i).tangent)>0.85,def.id+' start turns too sharply');
  }
 });
+
+ test('graphics levels reduce decoration without changing the track, gates or boost pads',()=>{
+  for(const def of TRACKS){
+   const track=new Track(def,'high'), samples=track.samples, gates=[...track.gateIndices], pads=[...track.boostIndices];
+   const count=track.decorMeshes[0].count;
+   track.setQuality('low');assert.ok(track.decorMeshes[0].count<count/2);
+   assert.equal(track.samples,samples);assert.deepEqual(track.gateIndices,gates);assert.deepEqual(track.boostIndices,pads);
+   track.setQuality('high');assert.equal(track.decorMeshes[0].count,count);
+  }
+ });
+
+ test('changing graphics releases effects and shadows while preserving race state and crisp canvas layout',()=>{
+  const scene=new THREE.Scene(), material=new THREE.MeshStandardMaterial();scene.add(new THREE.Mesh(new THREE.BoxGeometry(),material));
+  const g=Object.create(Game.prototype), player={speed:20}, quiz={t:2};let released=0, ratio=0, resized=0;
+  const sun=new THREE.DirectionalLight();sun.shadow.map={dispose(){released++;}};
+  const particles=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(1200),3)));
+  Object.assign(g,{quality:'high',canvas:{dataset:{}},scene,sun,player,quiz,raceTime:12,pN:400,pLife:new Float32Array(400),particles,
+   renderer:{shadowMap:{enabled:true},setPixelRatio(v){ratio=v;}},
+   composer:{passes:[{dispose(){released++;}}],dispose(){released++;}},resize(){resized++;}});
+  globalThis.window={devicePixelRatio:3};
+  Game.prototype.setQuality.call(g,'low');
+  assert.equal(g.quality,'low');assert.equal(ratio,0.75);assert.equal(g.composer,null);assert.equal(released,3);
+  assert.equal(g.renderer.shadowMap.enabled,false);assert.equal(sun.castShadow,false);assert.equal(g.pN,60);assert.equal(particles.geometry.drawRange.count,60);
+  assert.equal(g.player,player);assert.equal(g.player.speed,20);assert.equal(g.quiz,quiz);assert.equal(g.raceTime,12);assert.equal(resized,1);
+ });

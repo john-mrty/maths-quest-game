@@ -47,3 +47,14 @@ Checks cover camera continuity, forward track direction at every grid, two male 
 Touch-only Tap to steer is saved per learner and mutually exclusive with tilt. Full left and right halves of the viewport accept steering, with explicit brake, item and pause controls taking priority. Short taps nudge for 160ms; holding continues turning and dragging across the centre switches direction. Portrait hides target decorations while retaining hit areas; landscape uses faint edge chevrons. A brief guide appears during the race start and disappears shortly after GO without pausing play.
 
 Pause, questions, leaving play, control changes, resizing, page hiding and focus loss clear tap steering. Multi-touch restores the remaining thumb on release; desktop mouse clicks are ignored. Cache version 74 includes the new controller offline. Physical device handling and visual layout remain unverified.
+
+
+## Automatic graphics
+
+Turbo Tables chooses Full, Balanced or Light graphics internally; there is no new learner setting. Coarse pointer, available CPU core count and approximate memory provide conservative starting hints. Exact models and OS versions are not collected or required.
+
+Only visible, unpaused driving contributes to performance measurements. Three seconds of warm-up are followed by two-second frame-rate windows. Six sustained seconds below 45 fps lowers one level; isolated stalls, maths stops and background-tab returns do not trigger a change. Forty smooth driving seconds at 55 fps or above can raise quality for the next race. Saved levels stay on the device for seven days, then are reassessed. Unavailable local storage does not block play.
+
+Full uses up to 1.75× rendering resolution, 2048-pixel shadows and post-processing. Balanced caps resolution at 1×, uses 1024-pixel shadows, skips post-processing and reduces decorative scenery and particles. Light caps resolution at 0.75×, disables shadow maps and tyre trails, retains simple kart shadows, and further reduces scenery and particles. HTML controls and maths text retain their native resolution. Track geometry, checkpoints, opponents, physics and maths difficulty do not change.
+
+Graphics-context recovery selects Light and leaves the race paused for the player to resume. The canvas `data-graphics-quality` attribute exposes the current internal level for diagnostics. Actual older iPhone/iPad testing remains necessary; desktop checks cannot establish their frame rates.
