@@ -8,7 +8,8 @@ export function raceSummary(value) {
  return {questions:value.asked,correct:value.correct,durationSeconds:value.time,rank:Math.max(1,Math.min(8,Math.floor(Number(value.rank)||8))),track:String(value.track||'').slice(0,40),classLevel:Math.max(1,Math.min(6,Math.floor(Number(value.classLevel)||1)))};
 }
 export function openTurboTables(learner,hooks){
- const dialog=document.createElement('dialog');dialog.className='tables-dialog';dialog.setAttribute('aria-label','Turbo Tables');
+ const duo=['duo','retro'].includes(new URLSearchParams(location.search).get('controls'));
+ const dialog=document.createElement('dialog');dialog.className='tables-dialog'+(duo?' duo-layout':'');dialog.setAttribute('aria-label','Turbo Tables');
  dialog.innerHTML='<div class="tables-shell"><header><strong>Turbo Tables</strong><span class="tables-learner"></span><button class="tables-pause" aria-label="Pause or resume Turbo Tables">Ⅱ</button><button class="close" aria-label="Close Turbo Tables">×</button></header><p class="tables-loading" role="status">Opening Turbo Tables…</p><iframe title="Turbo Tables racing game" sandbox="allow-scripts allow-same-origin" allow="autoplay; accelerometer; gyroscope"></iframe></div>';
  const frame=dialog.querySelector('iframe'),token=crypto.randomUUID(),origin=location.origin,completed=new Set();let closed=false;
  const state=learner.turboTables||{setup:{},progress:{facts:{},history:[]}};learner.turboTables=state;
@@ -32,5 +33,6 @@ export function openTurboTables(learner,hooks){
  }
  function close(){if(closed)return;closed=true;send('stop');window.removeEventListener('message',message);frame.src='about:blank';dialog.remove();hooks.close();}
  window.addEventListener('message',message);dialog.addEventListener('close',close,{once:true});dialog.addEventListener('cancel',e=>e.preventDefault());dialog.querySelector('.close').onclick=()=>dialog.close();
- frame.src=`./turbo-tables/index.html?embedded=1&token=${encodeURIComponent(token)}`;document.body.appendChild(dialog);dialog.showModal();
+ const controls=duo?'&controls=duo':'';
+ frame.src=`./turbo-tables/index.html?embedded=1&token=${encodeURIComponent(token)}${controls}`;document.body.appendChild(dialog);dialog.showModal();
 }

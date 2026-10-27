@@ -2,7 +2,7 @@ const params=new URLSearchParams(location.search),embedded=params.get('embedded'
 export function notify(type,data){if(embedded)window.parent.postMessage({source:'turbo-tables',token,type,data},location.origin);}
 // A racer always belongs to a Maths Quest learner, including visits to old direct links.
 if (!embedded) {
- location.replace(new URL('../?game=turbo-tables', location.href).href);
+ location.replace(new URL('../?game=turbo-tables'+(['duo','retro'].includes(params.get('controls'))?'&controls=duo':''), location.href).href);
  await new Promise(() => {});
 }
 export const host=embedded?await new Promise((resolve,reject)=>{

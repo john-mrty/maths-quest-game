@@ -248,13 +248,13 @@ body.touch .qopt .key { display: none; }
         <button class="chip" id="btnHaptics" aria-pressed="true" hidden>Haptics: On</button>
         <button class="chip tiltOnly" id="btnTap" aria-pressed="false">Tap to steer: Off</button>
         <button class="chip tiltOnly" id="btnTilt" aria-pressed="false">Tilt to steer: Off</button>
-        <button class="big" id="btnGo">Race!</button>
       </div>
       <p class="sub optMsg" id="easyMsg"></p>
       <p class="sub optMsg" id="tiltMsg"></p>
       <p class="sub keys"><kbd>←</kbd> <kbd>→</kbd> steer · <kbd>Space</kbd> item · <kbd>↓</kbd> brake</p>
     </div>
     <button class="linkBtn" id="btnBack">Change name</button>
+    <div class="raceActionBar"><button class="big" id="btnGo">Race!</button></div>
   </div>
 
   <!-- HUD -->
@@ -294,6 +294,24 @@ body.touch .qopt .key { display: none; }
       <div class="tbtn" id="tGas" role="button" aria-label="Hold to accelerate">GO</div><div class="tbtn" id="tReverse">Brake</div><button class="tbtn" id="tItem" type="button" hidden aria-label="Use held item"></button>
     </div>
   </div>
+
+  <section id="retroController" aria-label="Maths Quest game controller" hidden>
+    <div class="retroBrand"><span class="retroMark">✦</span> Maths Quest <small>Turbo Tables</small></div>
+    <div class="retroPanel">
+      <div class="retroDpad" aria-label="Steering">
+        <span class="retroVertical" aria-hidden="true"></span>
+        <button data-retro="left" class="retroDirection" aria-label="Steer left">◀</button>
+        <span class="retroCentre" aria-hidden="true"></span>
+        <button data-retro="right" class="retroDirection" aria-label="Steer right">▶</button>
+      </div>
+      <div class="retroMiddle"><span>Auto drive</span><button id="retroPause" aria-label="Pause or resume race">Start</button></div>
+      <div class="retroActions">
+        <div class="retroAction"><button data-retro="brake" id="retroBrake" aria-label="Hold B to brake">B</button><small id="retroBrakeLabel">Brake</small></div>
+        <div class="retroAction"><button data-retro="action" id="retroAction" aria-label="Use power-up"><span id="retroItemIcon">A</span></button><small id="retroActionLabel">Power-up</small></div>
+      </div>
+    </div>
+    <p id="retroHint">◀ ▶ Steer · Auto acceleration</p>
+  </section>
 
   <!-- Pause -->
   <div id="pause" class="layer menu dim" hidden>

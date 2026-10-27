@@ -63,7 +63,7 @@ test('the visual countdown receives a declining fraction and freezes when the ra
 
 test('touch pad holds acceleration beyond its edge, ignores extra fingers and clears on release or interruption',()=>{
  const listeners={},classes=new Set(),pad={getBoundingClientRect:()=>({left:0,top:0,width:148}),classList:{add:x=>classes.add(x),remove:x=>classes.delete(x)},setPointerCapture(){},addEventListener:(name,fn)=>listeners[name]=fn},knob={style:{}};
- const touch={gas:false,padSteer:null},context={touch,tilt:{on:false},$:(id)=>id==='drivePad'?pad:knob,window:{addEventListener:(name,fn)=>listeners[name]=fn}};
+ const touch={gas:false,padSteer:null},context={touch,retroController:null,tilt:{on:false},$:(id)=>id==='drivePad'?pad:knob,window:{addEventListener:(name,fn)=>listeners[name]=fn}};
  const source=fs.readFileSync(new URL('../turbo-tables/js/main.js',import.meta.url),'utf8');
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf("const pad = $('drivePad')"),source.indexOf('const touchDevice=')),context);
  const event=(id,x,y)=>({pointerId:id,clientX:x,clientY:y,preventDefault(){}});
@@ -152,6 +152,7 @@ test('sustained barrier scraping moves sideways towards the road without telepor
  for(let i=0;i<25;i++)g.updateRecovery(.1);
  assert.ok(g.player.pos.x<12);assert.ok(g.player.pos.x>0);assert.equal(g.player.pos.z,10);
 });
+
 
 test('barrier clearance includes kart width, nose, slide and spin on either side',()=>{
  const sample={tangent:new THREE.Vector3(0,0,1),right:new THREE.Vector3(1,0,0)};
