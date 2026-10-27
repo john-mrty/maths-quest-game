@@ -1,3 +1,4 @@
+import {AdaptiveGraphics} from '../turbo-tables/js/graphics.js';
 import {test} from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -94,13 +95,13 @@ test('auto acceleration maps Down to braking and Space to item use',()=>{
 
 test('graphics loss freezes the race and restoration waits for explicit resume',()=>{
  const g=Object.create(Game.prototype);let prevented=false,restored=null,clockReset=0,freed=0;
- Object.assign(g,{scene:{},state:'racing',paused:false,keys:{ArrowLeft:true},sound:{setEngine(){},setTyreScrub(){}},
+ Object.assign(g,{graphics:new AdaptiveGraphics(),scene:{},state:'racing',paused:false,keys:{ArrowLeft:true},sound:{setEngine(){},setTyreScrub(){}},
   ui:{onPause(){},onGraphics(value){restored=value;}},clock:{getDelta(){clockReset++;}},
   setQuality(q){this.quality=q;},composer:{passes:[{dispose(){freed++;}}],dispose(){freed++;}}});
  g.onContextLost({preventDefault(){prevented=true;}});
  assert.ok(prevented);assert.ok(g.paused);assert.ok(g.contextLost);assert.deepEqual(g.keys,{});assert.equal(restored,false);
  g.togglePause(false);assert.ok(g.paused);
- g.onContextRestored();assert.equal(g.contextLost,false);assert.equal(g.quality,'medium');assert.equal(freed,2);
+ g.onContextRestored();assert.equal(g.contextLost,false);assert.equal(g.quality,'low');assert.equal(freed,2);
  assert.equal(clockReset,1);assert.equal(restored,true);assert.ok(g.paused);
  g.togglePause(false);assert.equal(g.paused,false);
 });
