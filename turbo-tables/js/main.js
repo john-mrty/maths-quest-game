@@ -275,7 +275,7 @@ function renderEasy() {
   $('tReverse').hidden = junior;
   document.querySelector('.keys').innerHTML = '<kbd>←</kbd> <kbd>→</kbd> steer · <kbd>Space</kbd> item' + (junior ? '' : ' · <kbd>↓</kbd> brake');
   const choice = drivingChoice(setup);
-  $('easyMsg').textContent = ({relaxed:'Gentler speed, stronger steering help and forgiving opponents.',challenging:'Full speed, independent steering and faster opponents.'})[choice] + (junior ? '' : ' Hold brake to slow down.');
+  $('easyMsg').textContent = ({relaxed:'Gentler speed, stronger steering help and forgiving opponents.',progressing:'Faster racing, light steering help and stronger opponents.',challenging:'Full speed, independent steering and faster opponents.'})[choice] + (junior ? '' : ' Hold brake to slow down.');
 }
 function showItemPicture(container, id) {
   const picture = document.createElement('img'); picture.src = `icons/${id}.svg`; picture.alt = ITEMS[id].name;

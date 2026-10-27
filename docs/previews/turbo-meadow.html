@@ -20,7 +20,10 @@ const previewIndex=track.bridgeIndex??Math.round(track.N*0.24);
 const s=track.sampleAt(previewIndex),anchor=new THREE.Object3D();anchor.position.copy(s.pos);anchor.lookAt(s.pos.clone().add(s.tangent));anchor.updateMatrixWorld();
 const world=(x,y,z)=>anchor.localToWorld(new THREE.Vector3(x,y,z));
 lighting.sun.position.copy(world(45,75,-30));lighting.sun.target.position.copy(s.pos);
-const kart=buildKart(CHARACTERS[3]);const a=track.sampleAt(previewIndex-5);kart.group.position.copy(a.pos);kart.group.rotation.y=Math.atan2(a.tangent.x,a.tangent.z);scene.add(kart.group);
+const kart=buildKart(CHARACTERS[3]);const a=track.sampleAt(previewIndex-5);kart.group.position.copy(a.pos);
+// The timber deck is centred 0.10 above the road and is 0.22 thick.
+if(track.bridgeIndex !== null) kart.group.position.y += 0.22;
+kart.group.rotation.y=Math.atan2(a.tangent.x,a.tangent.z);scene.add(kart.group);
 const tilePreview=new URLSearchParams(location.search).has('tile');if(tilePreview)document.querySelector('aside').hidden=true;
 let mode=params.get('view')==='track'?'bridge':tilePreview?'kart':'bridge';document.querySelector('#bridge').onclick=()=>mode='bridge';document.querySelector('#kart').onclick=()=>mode='kart';
 function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();
