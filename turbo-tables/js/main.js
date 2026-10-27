@@ -112,7 +112,7 @@ const ui = {
     clearTimeout(feedbackTimer); feedbackTimer = setTimeout(() => el.classList.remove('show'), correct ? 1600 : 2400);
   },
   onCountdown(n) {
-    if(n===0){clearTimeout(tapGuideTimer);tapGuideTimer=setTimeout(hideTapGuide,1200);}
+    if(n <= 2) hideTapGuide();
     const el = $('count'); el.textContent = n === 0 ? 'GO!' : String(n); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(countTimer); countTimer = setTimeout(() => el.classList.remove('show'), n === 0 ? 900 : 700);
   },

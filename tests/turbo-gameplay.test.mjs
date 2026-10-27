@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {Game,answerBoost,ANSWER_SECONDS} from '../turbo-tables/js/game.js';
+import {Game,kartWallLimit,answerBoost,ANSWER_SECONDS} from '../turbo-tables/js/game.js';
 
 function race(){
  const g=Object.create(Game.prototype),q={text:'7 × 8',answer:56,options:[54,56,63],correctIndex:1,key:'7x8'};
@@ -151,4 +151,25 @@ test('sustained barrier scraping moves sideways towards the road without telepor
  const {g}=recoveryRace(true);g.player.heading=0;g.player.pos.x=12;
  for(let i=0;i<25;i++)g.updateRecovery(.1);
  assert.ok(g.player.pos.x<12);assert.ok(g.player.pos.x>0);assert.equal(g.player.pos.z,10);
+});
+
+test('barrier clearance includes kart width, nose, slide and spin on either side',()=>{
+ const sample={tangent:new THREE.Vector3(0,0,1),right:new THREE.Vector3(1,0,0)};
+ const g=Object.create(Game.prototype);g.track={samples:[sample],nearestIndex:()=>0,lateral:p=>p.x};
+ for(const side of [-1,1]) for(const heading of [0,.4,Math.PI/2,Math.PI]) for(const spin of [0,.9]){
+  const r={idx:0,pos:new THREE.Vector3(side*9.6,0,20),heading,spin,cornerSlide:.7,drift:{active:false}};
+  g.keepKartInsideWalls(r);
+  assert.ok(Math.abs(r.pos.x)<=kartWallLimit(r,sample)+1e-8);
+  assert.equal(r.pos.z,20);assert.equal(r.idx,0);
+ }
+ const r={heading:0,spin:0,drift:{active:false}};
+ assert.ok(kartWallLimit(r,sample)>kartWallLimit({...r,heading:Math.PI/2},sample));
+});
+test('racer separation against a barrier is clamped again before drawing',()=>{
+ const sample={tangent:new THREE.Vector3(0,0,1),right:new THREE.Vector3(1,0,0)};
+ const g=Object.create(Game.prototype);g.track={samples:[sample],nearestIndex:()=>0,lateral:p=>p.x};g.sound={};
+ const kart=x=>({idx:0,pos:new THREE.Vector3(x,0,0),heading:0,spin:0,drift:{active:false},stats:{mass:1},speed:20});
+ const a=kart(8),b=kart(7);g.racers=[a,b];g.collideRacers();assert.ok(a.pos.x>8);
+ for(const r of g.racers)g.keepKartInsideWalls(r);
+ assert.ok(a.pos.x<=kartWallLimit(a,sample));
 });
