@@ -22,7 +22,7 @@ test('ready button displays the held object, action and accessible name, and cle
  const start=source.indexOf('let readyItem;'),end=source.indexOf('// ---------- Tilt',start);
  const button={hidden:true,replaceChildren(...nodes){this.nodes=nodes;},setAttribute(k,v){this[k]=v;},removeAttribute(k){delete this[k];}};
  const items={ball:{name:'Bouncy ball',hint:'Fire it ahead'},bubble:{name:'Bubble',hint:'Blocks one hit'}};
- const context=vm.createContext({$:()=>button,ITEMS:items,itemAction,document:{createElement:()=>({})}});
+ const context=vm.createContext({$:()=>button,game:{},renderRetroAction(){},ITEMS:items,itemAction,document:{createElement:()=>({})}});
  vm.runInContext(source.slice(start,end),context);
  vm.runInContext('renderReadyItem("ball")',context);assert.equal(button.hidden,false);assert.equal(button.nodes[0].src,'icons/ball.svg');assert.equal(button.nodes[1].textContent,'Shoot');assert.match(button['aria-label'],/Bouncy ball/);
  vm.runInContext('renderReadyItem("bubble")',context);assert.equal(button.nodes[1].textContent,'Protect');

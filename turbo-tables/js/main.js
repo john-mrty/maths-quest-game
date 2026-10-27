@@ -1,3 +1,4 @@
+import { createRetroControls } from './retro-controls.js';
 import { drivingChoice, itemAction } from './driving.js';
 import * as THREE from 'three';
 import { createHaptics } from './haptics.js';
@@ -21,6 +22,12 @@ if(host){setup.name=host.name;setup.levelId=Math.max(1,Math.min(6,Number(host.cl
 if(setup.tilt)setup.tap=false;
 const saveSetup = () => { if(host){notify('setup',setup);return;}try { localStorage.setItem('turbo-tables-setup', JSON.stringify(setup)); } catch (e) { /* ignore */ } };
 
+const retroVariant = ['duo','retro'].includes(new URLSearchParams(location.search).get('controls'));
+if(retroVariant){document.body.classList.add('retroVariant');setup.tilt=false;setup.tap=false;}
+let retroController = null, retroAnswer = 1;
+// An explicit preview mode, not a claim that Safari exposes the device's fold pose.
+const retroPortrait = matchMedia('(min-height:480px)');
+const retroActive = () => retroVariant && retroPortrait.matches;
 const sound = new Sound();
 if(host)sound.setMuted(host.sound===false);
 $('btnMute').textContent=sound.muted?'🔇':'🔊';
@@ -125,6 +132,7 @@ const ui = {
   onItemUsed() { renderReadyItem(null); hudEls.itemIcon.textContent = ''; hudEls.itemName.textContent = ''; lastHud.item = null; },
   onPause(p) { if(p){this.onRecovery(null);haptics.stop();releasePad();tapSteering.reset();hideTapGuide();} $('pause').hidden = !p;if(p)sound.ctx?.suspend();else sound.resume(); },
   onQuizOpen(q) {
+    retroAnswer=1; setRetroAnswer(); renderRetroAction(null, true);
     this.onRecovery(null);
     haptics.stop();
     releasePad();tapSteering.reset();hideTapGuide(); $('approachCue').hidden = true;
@@ -151,13 +159,13 @@ const ui = {
     $('quizCountdown').setAttribute('aria-valuetext',timedOut?'Time is up':'Answer submitted');
     $('bonusLabel').textContent = correct ? `${reward.duration.toFixed(1)} second boost coming up!` : 'A short slowdown, then keep racing. You can get the next one!';
   },
-  onQuizClose() { $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
+  onQuizClose() { document.querySelectorAll('.qopt.selected').forEach(b=>b.classList.remove('selected')); renderRetroAction(game?.player?.item); $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
   onFinish(results) { haptics.stop();tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:drivingChoice(setup) === 'relaxed'}); },
 };
 
 // ---------- Screens ----------
 const screens = ['connecting', 'setup', 'hud', 'pause', 'results', 'loading'];
-function show(...ids) { if(!ids.includes('hud')){tapSteering.reset();hideTapGuide();} for (const s of screens) $(s).hidden = !ids.includes(s); }
+function show(...ids) { document.body.classList.toggle('retroPlaying',retroActive() && ids.includes('hud')); $('retroController').hidden = !(retroActive() && ids.includes('hud')); if(!ids.includes('hud'))retroController?.reset(); if(!ids.includes('hud')){tapSteering.reset();hideTapGuide();} for (const s of screens) $(s).hidden = !ids.includes(s); }
 
 const game = new Game({ canvas: $('gl'), sound, ui });
 window.__game = game;
@@ -272,7 +280,7 @@ function showResults(r) {
 // ---------- Easy driving ----------
 function renderEasy() {
   const junior = setup.levelId <= 3;
-  $('tReverse').hidden = junior;
+  $('tReverse').hidden = junior; $('retroBrake').hidden=junior; $('retroBrakeLabel').hidden=junior;
   document.querySelector('.keys').innerHTML = '<kbd>←</kbd> <kbd>→</kbd> steer · <kbd>Space</kbd> item' + (junior ? '' : ' · <kbd>↓</kbd> brake');
   const choice = drivingChoice(setup);
   $('easyMsg').textContent = ({relaxed:'Gentler speed, stronger steering help and forgiving opponents.',progressing:'Faster racing, light steering help and stronger opponents.',challenging:'Full speed, independent steering and faster opponents.'})[choice] + (junior ? '' : ' Hold brake to slow down.');
@@ -283,6 +291,7 @@ function showItemPicture(container, id) {
 }
 let readyItem;
 function renderReadyItem(id) {
+  renderRetroAction(id, !!game.quiz);
   const button = $('tItem'); button.hidden = !id;
   if (id === readyItem) return;
   readyItem = id;
@@ -356,7 +365,7 @@ document.querySelectorAll('.qopt').forEach((b) => b.addEventListener('pointerdow
 game.setTouch(touch);
 for (const [id, key] of [['tGas', 'gas'], ['tReverse', 'reverse'], ['tItem', 'item']]) {
   const el = $(id);
-  const on = (e) => { e.preventDefault(); touch[key] = true; el.setPointerCapture(e.pointerId); el.classList.add('active'); };
+  const on = (e) => { if(retroActive())return; e.preventDefault(); touch[key] = true; el.setPointerCapture(e.pointerId); el.classList.add('active'); };
   const off = (e) => { e.preventDefault(); touch[key] = false; el.classList.remove('active'); };
   el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
 }
@@ -366,6 +375,7 @@ for (const [id, key] of [['tGas', 'gas'], ['tReverse', 'reverse'], ['tItem', 'it
 const pad = $('drivePad'), knob = $('driveKnob');
 let padPointer = null;
 function releasePad() {
+  retroController?.reset();
   padPointer = null; touch.gas = false; touch.padSteer = null;
   knob.style.transform = ''; pad.classList.remove('active');
 }
@@ -397,6 +407,41 @@ function hideTapGuide(){clearTimeout(tapGuideTimer);$('tapGuide').hidden=true;do
 function showTapGuide(){hideTapGuide();if(!touchDevice||!setup.tap)return;$('tapGuide').hidden=false;document.body.classList.add('tapGuideVisible');tapGuideTimer=setTimeout(hideTapGuide,6500);}
 window.addEventListener('blur',()=>{tapSteering.reset();hideTapGuide();});
 window.addEventListener('resize',()=>tapSteering.reset());
+function renderRetroAction(id, question=false) {
+  if(!retroVariant)return;
+  const icon=$('retroItemIcon'),button=$('retroAction');
+  const key=question?'answer':id||'empty';
+  if(button.dataset.held===key)return;
+  button.dataset.held=key;button.dataset.ready=String(!!id||question);
+  if(id&&!question)showItemPicture(icon,id);else icon.textContent='A';
+  const label=question?'Answer':id?itemAction(id):'Power-up';
+  $('retroActionLabel').textContent=label;
+  button.setAttribute('aria-label',question?'Confirm selected answer':id?`${label}: ${ITEMS[id].name}`:'No power-up ready');
+}
+function setRetroAnswer(){if(!retroActive())return;document.querySelectorAll('.qopt').forEach((b,i)=>b.classList.toggle('selected',i===retroAnswer));}
+retroController=retroVariant?createRetroControls($('retroController'),{
+ enabled:()=>retroActive()&&!game.paused&&['countdown','racing'].includes(game.state)&&!$('hud').hidden&&$('results').hidden,
+ direction:(value,pressed)=>{
+  if(game.quiz){touch.padSteer=null;if(pressed&&!game.quiz.answered){retroAnswer=Math.max(0,Math.min(2,retroAnswer+(value===1?-1:1)));setRetroAnswer();}}
+  else touch.padSteer=value||null;
+ },
+ brake:pressed=>{touch.reverse=pressed&&setup.levelId>3&&!game.quiz;},
+ action:()=>{if(game.quiz){game.answerQuiz(retroAnswer);return;}if(game.player?.item){game.useItem(game.player);}},
+}):{reset(){}};
+// Bind variant lifecycle handling only for the Duo preview.
+if(retroVariant){
+
+for(const name of ['pointerup','pointercancel','lostpointercapture'])$('retroController').addEventListener(name,()=>{touch.item=false;});
+$('retroPause').addEventListener('click',()=>game.togglePause());
+retroPortrait.addEventListener('change',()=>{
+ retroController.reset();touch.item=false;
+ const playing=!$('hud').hidden;document.body.classList.toggle('retroPlaying',retroActive()&&playing);$('retroController').hidden=!(retroActive()&&playing);
+ game.resize();
+});
+window.addEventListener('blur',()=>{retroController.reset();touch.item=false;});
+window.addEventListener('pagehide',()=>{retroController.reset();touch.item=false;});
+window.addEventListener('resize',()=>{retroController.reset();touch.item=false;});
+}
 if(host){$('btnBack').textContent='← Back to games';$('btnPause').hidden=true;}
 window.addEventListener('message',e=>{if(!host||e.source!==window.parent||e.origin!==location.origin||e.data?.source!=='maths-quest'||e.data.token!==new URLSearchParams(location.search).get('token'))return;if(e.data.type==='pause')game.togglePause();if(e.data.type==='stop'){tapSteering.reset();hideTapGuide();game.togglePause(true);sound.setMuted(true);game.dispose();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){tapSteering.reset();hideTapGuide();releasePad();game.togglePause(true);game.keys={};for(const k in touch)if(typeof touch[k]==='boolean')touch[k]=false;}});

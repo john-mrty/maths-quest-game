@@ -129,3 +129,63 @@ body.touch #tItem{width:88px;height:96px;border:3px solid #fff;background:linear
  body.tapGuideVisible .tapZone span{animation:none;opacity:.55}
  #tapGuide{animation:none}
 }
+
+/* Keep the primary setup action visible independently of the scrolling choices. */
+#setup{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px));scroll-padding-bottom:112px}
+.raceActionBar{position:fixed;z-index:5;bottom:0;left:0;right:0;display:flex;justify-content:center;padding:12px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:#fffaf0f5;border-top:2px solid #fff;box-shadow:0 -6px 22px #39265b12}
+.raceActionBar .big{width:min(420px,100%);min-height:52px}
+@media(orientation:landscape) and (max-height:500px){
+ #setup{padding-bottom:84px;scroll-padding-bottom:84px}
+ .raceActionBar{justify-content:flex-end;padding-top:8px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+ .raceActionBar .big{width:170px;min-height:44px;padding:8px 24px}
+}
+/* Duo tabletop preview: equal display/controller halves with a clear fold region. */
+#retroController{display:none}
+@media(min-height:480px){
+ body.retroPlaying{--hud-top:56px;--pad-b:10px;background:#211b3a}
+ body.retroPlaying #gl,body.retroPlaying #hud{height:calc(50% - 12px);bottom:auto}
+ body.retroPlaying #gl{border-bottom:4px solid #211b3a}
+ body.retroPlaying #touch,body.retroPlaying #tapGuide,body.retroPlaying #item{display:none!important}
+ body.retroVariant #btnTap,body.retroVariant #btnTilt,body.retroVariant #tiltMsg{display:none}
+ body.retroPlaying #retroController{display:flex;position:absolute;inset:calc(50% + 12px) 0 0;flex-direction:column;justify-content:center;gap:clamp(10px,3vh,24px);padding:clamp(16px,3vh,32px) clamp(18px,4vw,48px) calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(150deg,#fffaf0,#e8e0f4);border:6px solid #fff8;border-radius:0 0 24px 24px;box-shadow:inset 0 4px 0 #b9accb;touch-action:none;user-select:none}
+ .retroBrand{font-size:clamp(17px,5vw,23px);font-weight:900;letter-spacing:-.04em;color:#5336c1}.retroMark{color:#7655e8;font-size:28px;margin-right:4px}.retroBrand small{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.18em;margin-left:35px;color:#6d6780}
+ .retroPanel{display:flex;align-items:center;justify-content:space-between;gap:clamp(8px,3vw,30px);min-height:clamp(140px,25vh,260px);background:#d7cde8;border-radius:18px;padding:18px 10px;border:2px solid #fff9;box-shadow:inset 0 2px 6px #39265b20}
+ .retroDpad{display:grid;grid-template-columns:42px 24px 42px;align-items:center;position:relative;height:116px;flex-shrink:0}
+ .retroVertical{position:absolute;left:36px;top:3px;bottom:3px;width:36px;background:#39265b;border-radius:8px;box-shadow:0 4px 0 #211b3a}
+ .retroDirection,.retroCentre{position:relative;height:42px;background:#39265b;color:#fff;border:0;box-shadow:0 4px 0 #211b3a;z-index:1}
+ .retroDirection{font-size:18px;padding:0;touch-action:none}.retroDirection:first-of-type{border-radius:8px 0 0 8px}.retroDirection:last-of-type{border-radius:0 8px 8px 0}.retroCentre::after{content:"";position:absolute;inset:12px 3px;border-radius:50%;background:#211b3a}
+ .retroMiddle{display:grid;gap:14px;text-align:center;align-self:end;margin-bottom:8px}.retroMiddle span{font-size:9px;color:#625173;font-weight:800;white-space:nowrap}.retroMiddle button{border:0;border-radius:12px;padding:5px 10px;background:#67537d;color:white;box-shadow:0 3px 0 #39265b;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+ .retroActions{display:flex;gap:10px;align-items:center}.retroAction{display:grid;justify-items:center;gap:8px}.retroAction:last-child{margin-top:-24px}
+ .retroAction button{width:clamp(48px,14vw,62px);height:clamp(48px,14vw,62px);border-radius:50%;background:linear-gradient(145deg,#a08afa,#7655e8);border:3px solid #fff9;color:#fff;font-size:24px;font-weight:900;padding:0;display:grid;place-items:center;box-shadow:0 5px 0 #5336c1,0 0 0 4px #c2b3df;touch-action:none}
+ #retroBrake{background:linear-gradient(145deg,#ffe99b,#eab948);box-shadow:0 5px 0 #ad8230,0 0 0 4px #c2b3df;color:#533b1b}
+ .retroAction small{font-size:10px;font-weight:850;color:#5336c1;white-space:nowrap}.retroAction img{width:42px;height:42px;display:block;pointer-events:none}
+ #retroAction[data-ready="true"]{box-shadow:0 5px 0 #5336c1,0 0 0 4px #fff0a6}
+ .retroPanel button.active{transform:translateY(3px);filter:brightness(1.14)}
+ #retroHint{font-size:11px;text-align:center;font-weight:750;color:#6d6780;margin:0}
+ body.retroPlaying #pos{font-size:34px}body.retroPlaying #lap{top:94px;font-size:15px}body.retroPlaying #timer{font-size:14px}body.retroPlaying #stars{top:77px;font-size:14px}body.retroPlaying #speedo{font-size:24px}body.retroPlaying #minimap{width:75px;height:75px;left:8px;bottom:8px}
+ body.retroPlaying .tiny{bottom:9px;right:8px}body.retroPlaying .tiny .iconBtn{width:32px;height:32px}
+ body.retroPlaying #quiz{padding:6px;background:#211b3a70;align-items:center}
+ body.retroPlaying .quizCard{max-height:100%;overflow:auto;padding:8px 10px;border-radius:18px}
+ body.retroPlaying .quizTitle{font-size:11px;letter-spacing:0;text-transform:none}
+ body.retroPlaying .bonus{height:10px;margin:6px 0}
+ body.retroPlaying .quizQ{font-size:32px;margin:4px 0 8px}
+ body.retroPlaying .qopt{padding:7px 4px;border-radius:12px;min-height:44px}body.retroPlaying .qopt .val{font-size:27px}
+ body.retroPlaying .qopt.selected{outline:4px solid #7655e8;outline-offset:2px}
+ body.retroPlaying .bonusLabel{font-size:10px;margin-top:8px}
+ body.retroPlaying .raceCue{font-size:11px;padding:5px 10px}body.retroPlaying #feedback{font-size:22px;padding:6px 10px}body.retroPlaying #feedback small{font-size:11px}
+ body.retroPlaying #count{font-size:100px}body.retroPlaying #lapToast{font-size:18px;top:50px}
+ body.retroPlaying #results,body.retroPlaying #pause{z-index:10}
+}
+@media(orientation:portrait) and (max-width:360px){.retroPanel{padding-inline:6px;gap:4px}.retroDpad{grid-template-columns:38px 22px 38px}.retroVertical{left:31px}.retroActions{gap:8px}.retroAction button{width:46px;height:46px}}
+
+@media(min-height:480px) and (min-width:600px){
+ .retroBrand{font-size:28px}.retroBrand small{font-size:12px}
+ .retroDpad{grid-template-columns:64px 38px 64px;height:168px}
+ .retroVertical{left:55px;width:56px}
+ .retroDirection,.retroCentre{height:60px}.retroDirection{font-size:26px}
+ .retroAction button{width:86px;height:86px;font-size:32px}.retroActions{gap:24px}
+ .retroAction img{width:62px;height:62px}.retroAction small{font-size:14px}
+ .retroMiddle span{font-size:12px}.retroMiddle button{font-size:13px;padding:8px 20px}
+ #retroHint{font-size:14px}
+ body.retroPlaying #minimap{width:100px;height:100px}
+}
