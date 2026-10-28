@@ -1,4 +1,4 @@
-const CACHE = "maths-quest-everyone-v82";
+const CACHE = "maths-quest-everyone-v83";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -15,6 +15,7 @@ const APP_SHELL = [
   "./turbo-tables.css?v=78",
   "./turbo-tables/index.html",
   "./turbo-tables/menu.css",
+  "./turbo-tables/race-loading.css",
   "./turbo-tables/js/audio.js",
   "./turbo-tables/js/game.js",
   "./turbo-tables/js/graphics.js",

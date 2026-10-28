@@ -253,13 +253,16 @@ function startRace() {
   progress = new Progress(`turbo-tables-progress-${(setup.name || 'racer').toLowerCase()}-${level.id}`,host?(host.progress||{facts:{},history:[]}):null,host?value=>{host.progress=value;notify('progress',value);}:null);
   lastHud = {}; ui.qKey = null; ui.mapDrawAt = 0;
   renderReadyItem(null); clearTimeout(ui.positionTimer); $('positionCue').hidden = true;
+  $('loadingStatus').textContent = `${character.name} is getting ready for ${trackDef.name}.`;
+  const driver = $('loadingDriver'); driver.replaceChildren();
+  if(portraits[character.id]){const image=document.createElement('img');image.src=portraits[character.id];image.alt='';driver.append(image);}else driver.textContent='🦊';
   show('loading');
-  // Let the loading card paint before the heavy texture generation starts
-  setTimeout(() => {
+  // Give the loader a paint, then build immediately without an artificial minimum wait.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
     game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: drivingChoice(setup) === 'relaxed' });
     document.body.classList.toggle('easy', drivingChoice(setup) === 'relaxed');
     show('hud'); game.resize(); showTapGuide();
-  }, 60);
+  }));
 }
 
 function showResults(r) {
@@ -280,7 +283,7 @@ function showResults(r) {
 // ---------- Easy driving ----------
 function renderEasy() {
   const junior = setup.levelId <= 3;
-  $('tReverse').hidden = junior; $('retroBrake').hidden=junior; $('retroBrakeLabel').hidden=junior;
+  $('tReverse').hidden = junior; $('retroBrake').hidden=false; $('retroBrakeLabel').hidden=false;
   document.querySelector('.keys').innerHTML = '<kbd>←</kbd> <kbd>→</kbd> steer · <kbd>Space</kbd> item' + (junior ? '' : ' · <kbd>↓</kbd> brake');
   const choice = drivingChoice(setup);
   $('easyMsg').textContent = ({relaxed:'Gentler speed, stronger steering help and forgiving opponents.',progressing:'Faster racing, light steering help and stronger opponents.',challenging:'Full speed, independent steering and faster opponents.'})[choice] + (junior ? '' : ' Hold brake to slow down.');
@@ -425,7 +428,7 @@ retroController=retroVariant?createRetroControls($('retroController'),{
   if(game.quiz){touch.padSteer=null;if(pressed&&!game.quiz.answered){retroAnswer=Math.max(0,Math.min(2,retroAnswer+(value===1?-1:1)));setRetroAnswer();}}
   else touch.padSteer=value||null;
  },
- brake:pressed=>{touch.reverse=pressed&&setup.levelId>3&&!game.quiz;},
+ brake:pressed=>{touch.duoBrake=pressed&&!game.quiz;},
  action:()=>{if(game.quiz){game.answerQuiz(retroAnswer);return;}if(game.player?.item){game.useItem(game.player);}},
 }):{reset(){}};
 // Bind variant lifecycle handling only for the Duo preview.

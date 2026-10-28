@@ -174,3 +174,29 @@ test('racer separation against a barrier is clamped again before drawing',()=>{
  for(const r of g.racers)g.keepKartInsideWalls(r);
  assert.ok(a.pos.x<=kartWallLimit(a,sample));
 });
+
+test('dedicated Duo brake works for every class and releases back to auto acceleration',()=>{
+ const previous=globalThis.navigator;Object.defineProperty(globalThis,'navigator',{value:{getGamepads:()=>[]},configurable:true});
+ try{for(let id=1;id<=6;id++){
+  const g=Object.create(Game.prototype);Object.assign(g,{level:{id},autoGas:true,keys:{},touch:{duoBrake:true},input:{steer:0}});
+  g.readInput();assert.equal(g.input.brake,1);assert.equal(g.input.throttle,0);
+  g.touch.duoBrake=false;g.readInput();assert.equal(g.input.brake,0);assert.equal(g.input.throttle,1);
+ }}finally{Object.defineProperty(globalThis,'navigator',{value:previous,configurable:true});}
+});
+
+test('desktop answers use fresh A/S/D presses, never steering arrows or old shortcuts',()=>{
+ const previous=globalThis.window,events={},answers=[];
+ globalThis.window={addEventListener:(name,handler)=>events[name]=handler};
+ try{
+  const g=Object.create(Game.prototype);Object.assign(g,{keys:{},quiz:{answered:false},paused:false,answerQuiz:i=>answers.push(i)});g.bindInput();
+  const press=(code,repeat=false)=>events.keydown({code,repeat,preventDefault(){}});
+  for(const key of ['ArrowLeft','ArrowUp','ArrowRight','ArrowDown','KeyW','Digit1','Digit2','Digit3','Numpad1','Numpad2','Numpad3'])press(key);
+  assert.deepEqual(answers,[]);
+  for(const key of ['KeyA','KeyS','KeyD'])press(key);
+  assert.deepEqual(answers,[0,1,2]);
+  press('KeyS',true);g.paused=true;press('KeyA');g.paused=false;g.quiz.answered=true;press('KeyD');
+  assert.deepEqual(answers,[0,1,2]);
+  const html=fs.readFileSync(new URL('../turbo-tables/index.html',import.meta.url),'utf8');
+  for(const key of ['A','S','D'])assert.ok(html.includes(`aria-keyshortcuts="${key}"`));
+ }finally{globalThis.window=previous;}
+});
