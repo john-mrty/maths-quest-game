@@ -189,3 +189,34 @@ body.touch #tItem{width:88px;height:96px;border:3px solid #fff;background:linear
  #retroHint{font-size:14px}
  body.retroPlaying #minimap{width:100px;height:100px}
 }
+
+/* Matte moulded plastic: fine grain, recessed panel and raised button caps. */
+@media(min-height:480px){
+ body.retroPlaying #retroController{
+  --plastic-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23000' opacity='.1' filter='url(%23n)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
+  background-image:var(--plastic-grain),linear-gradient(145deg,#fff8ed,#e9e0ef 65%,#d9cde2);
+  background-size:128px 128px,100% 100%;
+  border:0;border-top:3px solid #fff8;border-inline:3px solid #d6c8de;
+  box-shadow:inset 0 3px 1px #fff9,inset 0 -7px 2px #b9a9c8,inset 5px 0 8px #fff5,inset -5px 0 8px #a999b733;
+ }
+ .retroBrand{text-shadow:0 1px 0 #fff9}.retroBrand small{letter-spacing:.2em}
+ body.retroPlaying .retroPanel{
+  position:relative;border:2px solid #c3b4d0;border-bottom-color:#fff9;
+  border-radius:22px;background-image:var(--plastic-grain),linear-gradient(160deg,#c4b6d6,#e2d7eb);
+  background-size:96px 96px,100% 100%;
+  box-shadow:inset 0 3px 7px #4e365e30,inset 0 -2px 0 #fff6,0 1px 0 #fff8;
+ }
+ .retroPanel::before,.retroPanel::after{content:"";position:absolute;top:8px;width:8px;height:8px;border-radius:50%;background:linear-gradient(90deg,#a899b8 43%,#695974 43% 57%,#b7a7c7 57%);border:1px solid #b5a5c5;box-shadow:inset 0 1px 2px #39265b50,0 1px 0 #fff8;pointer-events:none}
+ .retroPanel::before{left:9px}.retroPanel::after{right:9px}
+ .retroVertical,.retroDirection,.retroCentre{background-image:var(--plastic-grain),linear-gradient(140deg,#564168,#362447);background-size:80px 80px,100% 100%}
+ .retroDirection{border-top:2px solid #7f6992;border-bottom:3px solid #281937;box-shadow:0 5px 0 #21142d,0 7px 5px #39265b30;text-shadow:0 -1px 0 #21142d}
+ .retroVertical{box-shadow:inset 2px 2px 2px #fff2,0 5px 0 #21142d,0 7px 5px #39265b30}
+ .retroAction button{background-image:var(--plastic-grain),radial-gradient(ellipse at 35% 25%,#ac96ec,#8060ce 65%,#6947b6);background-size:72px 72px,100% 100%;border:2px solid #ae97e4;border-bottom-color:#6541a9;box-shadow:inset 0 3px 2px #ddcfff66,inset 0 -3px 3px #51328e55,0 7px 0 #533783,0 9px 7px #39265b40,0 0 0 5px #ad9bc5}
+ #retroBrake{background-image:var(--plastic-grain),radial-gradient(ellipse at 35% 25%,#ffe8a0,#e7be58 65%,#ce9e34);background-size:72px 72px,100% 100%;border-color:#f8dea0;border-bottom-color:#b18a30;box-shadow:inset 0 3px 2px #fff1c888,inset 0 -3px 3px #b17f2455,0 7px 0 #a97d28,0 9px 7px #39265b40,0 0 0 5px #ad9bc5}
+ #retroAction[data-ready="true"]{outline:3px solid #ffecab;outline-offset:5px;box-shadow:inset 0 3px 2px #ddcfff66,inset 0 -3px 3px #51328e55,0 7px 0 #533783,0 9px 7px #39265b40}
+ .retroPanel .retroAction button.active{transform:translateY(5px);filter:brightness(.97);box-shadow:inset 0 2px 4px #39265b40,0 2px 0 #533783,0 3px 3px #39265b30,0 0 0 5px #ad9bc5}
+ .retroPanel #retroBrake.active{box-shadow:inset 0 2px 4px #865b2640,0 2px 0 #a97d28,0 3px 3px #39265b30,0 0 0 5px #ad9bc5}
+ .retroPanel .retroDirection.active{transform:translateY(3px);filter:brightness(.95);box-shadow:inset 0 2px 3px #21142d66,0 2px 0 #21142d}
+ .retroMiddle button{background-image:var(--plastic-grain),linear-gradient(#887594,#655273);background-size:72px 72px,100% 100%;border-top:1px solid #af9abe;box-shadow:inset 0 1px 1px #fff3,0 3px 0 #46344f,0 4px 3px #39265b33}
+ .retroAction small{text-shadow:0 1px 0 #fff7;letter-spacing:.03em}
+}

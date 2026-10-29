@@ -17,7 +17,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const UP = new THREE.Vector3(0, 1, 0);
 // Answer keys during a maths stop: first / second / third answer.
-const QUIZ_KEYS = { ArrowLeft: 0, KeyA: 0, Digit1: 0, Numpad1: 0, ArrowUp: 1, KeyW: 1, Digit2: 1, Numpad2: 1, ArrowRight: 2, KeyD: 2, Digit3: 2, Numpad3: 2 };
+const QUIZ_KEYS = { KeyA: 0, KeyS: 1, KeyD: 2 };
 export const ANSWER_SECONDS = 10;
 export function answerBoost(seconds) {
   const quickness = clamp(1 - seconds / ANSWER_SECONDS, 0, 1);
@@ -173,6 +173,8 @@ export class Game {
       if (gp.buttons[14]?.pressed) steer = 1; if (gp.buttons[15]?.pressed) steer = -1;
     }
     if (this.level?.id <= 3) reverse = 0;
+    // The dedicated Duo controller brake is available at every class level.
+    if (t.duoBrake) reverse = 1;
     if (this.autoGas) throttle = reverse ? 0 : 1;
     const i = this.input;
     i.driftPressed = drift && !i.drift; i.driftReleased = !drift && i.drift;
