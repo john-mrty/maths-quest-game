@@ -1,3 +1,4 @@
+import { RaceVR } from './vr.js';
 import { createRetroControls } from './retro-controls.js';
 import { drivingChoice, itemAction } from './driving.js';
 import * as THREE from 'three';
@@ -160,7 +161,7 @@ const ui = {
     $('bonusLabel').textContent = correct ? `${reward.duration.toFixed(1)} second boost coming up!` : 'A short slowdown, then keep racing. You can get the next one!';
   },
   onQuizClose() { document.querySelectorAll('.qopt.selected').forEach(b=>b.classList.remove('selected')); renderRetroAction(game?.player?.item); $('quiz').hidden = true; document.body.classList.remove('quizOpen'); },
-  onFinish(results) { haptics.stop();tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:drivingChoice(setup) === 'relaxed'}); },
+  onFinish(results) { if(game.vr?.active)game.vr.results=results;haptics.stop();tapSteering.reset();hideTapGuide();showResults(results);notify('complete',{runId,asked:results.asked,correct:results.correct,time:results.time,rank:results.rank,track:setup.trackId,classLevel:setup.levelId,easy:drivingChoice(setup) === 'relaxed'}); },
 };
 
 // ---------- Screens ----------
@@ -234,6 +235,23 @@ $('tracks').addEventListener('click', (e) => { const b = e.target.closest('[data
 // ---------- Flow ----------
 $('btnBack').addEventListener('click', () => notify('exit'));
 $('btnGo').addEventListener('click', startRace);
+// Feature detection keeps VR optional and leaves ordinary phone/desktop controls alone.
+const vrButton = $('btnVR'), vrStatus = $('vrStatus');
+if (window.isSecureContext && navigator.xr) {
+  navigator.xr.isSessionSupported('immersive-vr').then(supported => { vrButton.hidden = !supported; }).catch(() => {});
+}
+vrButton.addEventListener('click', async () => {
+  vrButton.disabled = true; vrStatus.textContent = '';
+  sound.resume();
+  try {
+    game.vr ||= new RaceVR(game, { retry: startRace });
+    await game.vr.enter();
+    startRace();
+  } catch (error) {
+    game.dispose(); game.state = 'idle'; buildSetup(); show('setup');
+    vrStatus.textContent = error.name === 'NotAllowedError' ? 'VR permission was declined. Choose Race in VR to try again.' : 'Could not start VR. Check your headset browser supports WebXR, then try again.';
+  } finally { vrButton.disabled = false; }
+});
 $('btnReloadGraphics').addEventListener('click', () => location.reload());
 $('btnAgain').addEventListener('click', startRace);
 $('btnSetup').addEventListener('click', () => { sound.click(); game.dispose(); buildSetup(); show('setup'); });
@@ -257,12 +275,14 @@ function startRace() {
   const driver = $('loadingDriver'); driver.replaceChildren();
   if(portraits[character.id]){const image=document.createElement('img');image.src=portraits[character.id];image.alt='';driver.append(image);}else driver.textContent='🦊';
   show('loading');
-  // Give the loader a paint, then build immediately without an artificial minimum wait.
-  requestAnimationFrame(() => requestAnimationFrame(() => {
+  // Window animation frames may be suspended during immersive WebXR.
+  const build = () => {
     game.start({ trackDef, character, level, ops: opsFor(level), progress, laps: 3, autoGas: true, gateMode: 'stop', easy: drivingChoice(setup) === 'relaxed' });
     document.body.classList.toggle('easy', drivingChoice(setup) === 'relaxed');
-    show('hud'); game.resize(); showTapGuide();
-  }));
+    show('hud'); game.resize(); if(!game.vr?.active)showTapGuide();
+  };
+  if(game.vr?.active)build();
+  else requestAnimationFrame(() => requestAnimationFrame(build));
 }
 
 function showResults(r) {

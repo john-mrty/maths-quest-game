@@ -62,7 +62,7 @@ export class Game {
     window.addEventListener('resize', () => this.resize());
     this.resize();
     this.loop = this.loop.bind(this);
-    requestAnimationFrame(this.loop);
+    this.renderer.setAnimationLoop(this.loop);
   }
 
   onContextLost(event) {
@@ -87,6 +87,7 @@ export class Game {
   }
 
   resize() {
+    if (this.renderer.xr?.isPresenting) return;
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     if (this.composer) { this.composer.setSize(w, h); this.composer.setPixelRatio(this.renderer.getPixelRatio()); }
@@ -97,7 +98,7 @@ export class Game {
     this.quality = q;
     this.canvas.dataset.graphicsQuality = q;
     const settings = GRAPHICS[q];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, settings.pixelRatio));
+    if (!this.renderer.xr?.isPresenting) this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, settings.pixelRatio));
     const shadowsChanged = this.renderer.shadowMap.enabled !== !!settings.shadows;
     this.renderer.shadowMap.enabled = !!settings.shadows;
     if (this.sun) {
@@ -125,7 +126,7 @@ export class Game {
   buildComposer() {
     this.releaseComposer();
     // Direct rendering retains tone mapping without extra full-screen targets on phones.
-    if (this.quality !== 'high') return;
+    if (this.vr?.active || this.quality !== 'high') return;
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     this.composer = new EffectComposer(this.renderer); this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -156,6 +157,7 @@ export class Game {
   }
 
   readInput() {
+    if (this.vr?.active) { this.vr.readInput(); return; }
     const k = this.keys, t = this.touch || {};
     const gp = navigator.getGamepads ? Array.from(navigator.getGamepads()).find((g) => g) : null;
     let steer = 0;
@@ -184,8 +186,8 @@ export class Game {
 
   // ---------- Race setup ----------
   start({ trackDef, character, level, ops, progress, laps, autoGas, gateMode, easy }) {
-    this.dispose();
-    this.setQuality(this.graphics.beginRace());
+    this.dispose(true);
+    this.setQuality(this.vr?.active ? 'low' : this.graphics.beginRace());
     this.scene = new THREE.Scene();
     this.scene.environment = this.envMap;
     this.scene.fog = new THREE.FogExp2(trackDef.fog, trackDef.stars ? 0.0022 : 0.0016);
@@ -219,10 +221,13 @@ export class Game {
     this.ui.setTrack(this.track);
     this.ui.onCountdown(3);
     this.sound.resume(); this.sound.startEngine(); this.sound.startMusic(trackDef.id === 'moon' ? 2 : trackDef.id === 'candy' ? 1 : 0);
+    this.vr?.attach();
     this.clock.getDelta();
   }
 
-  dispose() {
+  dispose(keepVR = false) {
+    this.vr?.detach();
+    if (!keepVR) this.vr?.exit();
     if (this.scene) {
       const seen = new Set();
       this.scene.traverse((o) => {
@@ -410,10 +415,9 @@ export class Game {
 
   // ---------- Main loop ----------
   loop() {
-    requestAnimationFrame(this.loop);
     const frameDelta = this.clock.getDelta();
     const dt = Math.min(0.1, frameDelta);
-    const quality = this.graphics.sample(frameDelta, !!this.scene && !this.contextLost && !document.hidden && !this.paused && !this.quiz && this.state === 'racing' && this.timeScale > 0.98);
+    const quality = !this.vr?.active && this.graphics.sample(frameDelta, !!this.scene && !this.contextLost && !document.hidden && !this.paused && !this.quiz && this.state === 'racing' && this.timeScale > 0.98);
     if (quality) this.setQuality(quality);
     this.frames = (this.frames || 0) + 1;
     if (!this.scene || this.contextLost || document.hidden) return;
@@ -432,7 +436,8 @@ export class Game {
       const gdt = dt * this.timeScale;
       for (let k = 0; k < (this.simSteps || 1); k++) { this.time += gdt; this.update(gdt); }
     }
-    if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
+    if (this.vr?.active) { this.vr.updateCamera(); this.vr.draw(); }
+    if (this.composer && !this.vr?.active) this.composer.render(); else this.renderer.render(this.scene, this.camera);
   }
 
   update(dt) {
@@ -468,7 +473,7 @@ export class Game {
     this.updateItemBoxes(dt); this.updateEntities(dt); this.updateParticles(dt);
     this.updateCamera(dt);
     this.fadeNearCamera();
-    this.sun.position.copy(this.player.pos).add(this.sunOffset); this.sun.target.position.copy(this.player.pos); this.sky.position.copy(this.camera.position);
+    this.sun.position.copy(this.player.pos).add(this.sunOffset); this.sun.target.position.copy(this.player.pos); this.camera.getWorldPosition(this.sky.position);
     this.sound.setTyreScrub?.(!this.quiz && !this.resumeDelay && !this.player.offroad ? Math.abs(this.player.cornerSlide || 0) : 0);
     this.sound.setEngine(clamp(Math.abs(this.player.speed) / 40, 0, 1), !this.quiz);
     this.ui.onHud(this.hudState());
@@ -838,6 +843,7 @@ export class Game {
   baseFov() { const a = this.camera.aspect; return a >= 1 ? 65 : 65 + Math.min(30, (1 - a) * 55); }
 
   cameraIntro(dt) {
+    if (this.vr?.active) { this.vr.updateCamera(); return; }
     const p = this.player;
     // Complete the orbit early and hold the exact stationary chase view for GO.
     const progress = clamp((4.2 - this.countdown) / 3.2, 0, 1);
@@ -852,6 +858,7 @@ export class Game {
     this.camera.lookAt(look);this.camera.fov=this.baseFov();this.camera.updateProjectionMatrix();
   }
   updateCamera(dt) {
+    if (this.vr?.active) { this.vr.updateCamera(); return; }
     const p = this.player; const fwd = new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading));
     const bend = this.track.sampleAt(p.idx).tangent.clone().cross(this.track.sampleAt(p.idx + 12).tangent).y;
     const lag = this.reducedMotion ? 0 : -(p.cornerSlide || 0) * 0.14 + clamp(bend, -0.3, 0.3) * 0.3;
@@ -871,9 +878,10 @@ export class Game {
   }
 
   fadeNearCamera() {
+    const cameraPosition = this.camera.getWorldPosition(new THREE.Vector3());
     for (const r of this.racers) {
       if (r.isPlayer) continue;
-      const d = r.pos.distanceTo(this.camera.position);
+      const d = r.pos.distanceTo(cameraPosition);
       const target = d < 3 ? 0.08 : d < 6 ? (d - 3) / 3 : 1;
       if (Math.abs((r.fade ?? 1) - target) < 0.01) continue;
       r.fade = target;
@@ -883,6 +891,7 @@ export class Game {
   }
   // ---------- Maths stop ----------
   quizPad() {
+    if (this.vr?.active) return [false, false, false];
     const gp = navigator.getGamepads ? Array.from(navigator.getGamepads()).find((g) => g) : null;
     if (!gp) return [false, false, false];
     return [!!gp.buttons[14]?.pressed || gp.axes[0] < -0.6, !!gp.buttons[12]?.pressed || !!gp.buttons[0]?.pressed, !!gp.buttons[15]?.pressed || gp.axes[0] > 0.6];
